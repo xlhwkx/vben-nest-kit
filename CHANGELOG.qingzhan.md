@@ -3,6 +3,24 @@
 > 本文件只记录 **青栈（Qingzhan）** 相对上游 Vben Admin 的后端与联调变更。  
 > 上游各包自带的 `CHANGELOG.md`（如 `apps/web-antd`、`packages/*`）**不要改写本文件、也不被本文件覆盖**。
 
+## [Unreleased]
+
+### Added
+
+- 登录失败锁定：`auth:fail:user:{username}` + `auth:fail:ip:{ip}`（`AUTH_FAIL_MAX` / `AUTH_FAIL_WINDOW_SEC`，默认 5 次 / 15min）→ HTTP **429**；成功登录清零用户名计数；审计 `auth.login_locked`
+- Upload **magic-bytes**（`file-type`）：真实类型须 ∈ 白名单，伪造 Content-Type → 400；multer `fileSize` 与 `UPLOAD_MAX_BYTES` 对齐
+
+### Changed
+
+- 登录 throttler Redis storage：**fail-closed**（Redis 不可用 → HTTP **503** `Rate limit unavailable`）；其它路由仍 fail-open + warn
+- Known gaps：补 **SliderCaptcha** 阻碍 headless UI 登录 / 静默 refresh 自动化勾选；划掉本刀已清项
+
+### Security
+
+- 凭证爆破：失败计数锁定与 IP QPS 限流互补
+- 上传内容嗅探，防 MZ/可执行体伪装 PNG 等
+
+
 ## [0.1.0] — 2026-11-02
 
 HEAD：以 `v0.1.0` tag 所指 commit 为准。  
@@ -47,19 +65,18 @@ HEAD：以 `v0.1.0` tag 所指 commit 为准。
 
 对照审查遗留与架构「明确未做」，**不在 v0.1.0 交付范围**（或仅建议项）：
 
-- Upload 仅 MIME 字符串校验，**未做 magic bytes / `file-type`**
-- Multer memory limit 与 `UPLOAD_MAX_BYTES` 未完全对齐（曾记）
-- Redis `auth:fail:{user|ip}` 登录失败锁定未做（与 IP 限流互补）
+- web-antd 登录页 **SliderCaptcha** 阻碍 headless / 自动化 UI 登录与静默 refresh 勾选（勿为过测默认关掉验证码）
 - 合同 §11 **浏览器 UI E2E / 静默 refresh 页面实跑**未勾完
 - 对象存储（S3 / MinIO）未接
 - **BullMQ 生产任务尚未引入**
 - OAuth / 多租户 / 完整 Clean Architecture 未做
 - 审计 sanitize 非递归；`SENSITIVE_KEY` 对裸 `token` 等可再补
-- 限流 Redis 故障当前 fail-open；生产强开 Swagger 宜加鉴权
+- 登录限流 Redis 已 fail-closed；**非登录**路由仍 fail-open；生产强开 Swagger 宜加鉴权
 - Playwright（或同类）浏览器 UI E2E 未建
 
 ### Notes
 
 - 已打 annotated tag **`v0.1.0`**；仓库当前为 **private**，**暂不创建 GitHub Release**（需要对外链接时再补）。
 - 真源仍是 `规则/vben-nestjs-backend-tech-plan.md` 与 `规则/api-contract-vben.md`。
+
 

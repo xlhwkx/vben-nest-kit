@@ -3,9 +3,9 @@ import {
   Logger,
   OnModuleDestroy,
   OnModuleInit,
-} from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import Redis from "ioredis";
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import Redis from 'ioredis';
 
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
@@ -16,16 +16,21 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   constructor(private readonly config: ConfigService) {}
 
   async onModuleInit(): Promise<void> {
-    const url = this.config.getOrThrow<string>("REDIS_URL");
-    this.client = new Redis(url, { maxRetriesPerRequest: 3 });
+    const url = this.config.getOrThrow<string>('REDIS_URL');
+    this.client = new Redis(url, {
+      maxRetriesPerRequest: 1,
+      connectTimeout: 2000,
+      // Fail fast when Redis is unreachable (login throttle fail-closed).
+      commandTimeout: 2000,
+    });
     try {
       await this.client.ping();
       this.healthy = true;
-      this.logger.log("Redis connected");
-    } catch (err) {
+      this.logger.log('Redis connected');
+    } catch (error) {
       this.healthy = false;
       this.logger.warn(
-        `Redis connect failed (auth still works without cache): ${String(err)}`,
+        `Redis connect failed (auth still works without cache): ${String(error)}`,
       );
     }
   }
@@ -46,7 +51,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     if (!this.client) return false;
     try {
       const res = await this.client.ping();
-      this.healthy = res === "PONG";
+      this.healthy = res === 'PONG';
       return this.healthy;
     } catch {
       this.healthy = false;
@@ -69,7 +74,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   async set(key: string, value: string, ttlSeconds: number): Promise<void> {
     try {
-      await this.client.set(key, value, "EX", ttlSeconds);
+      await this.client.set(key, value, 'EX', ttlSeconds);
     } catch {
       this.healthy = false;
       // ignore cache write failures
@@ -91,6 +96,28 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     } catch {
       this.healthy = false;
       return 0;
+    }
+  }
+
+  /**
+   * INCR + ensure TTL (set expire on first hit or when key has no TTL).
+   * Returns null when Redis is unavailable (caller decides fail-open/closed).
+   */
+  async incrWithTtl(key: string, ttlSeconds: number): Promise<number | null> {
+    try {
+      const n = await this.client.incr(key);
+      if (n === 1) {
+        await this.client.expire(key, ttlSeconds);
+      } else {
+        const ttl = await this.client.ttl(key);
+        if (ttl < 0) {
+          await this.client.expire(key, ttlSeconds);
+        }
+      }
+      return n;
+    } catch {
+      this.healthy = false;
+      return null;
     }
   }
 }

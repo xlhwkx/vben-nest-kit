@@ -1,18 +1,20 @@
 import {
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   Injectable,
-} from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import { JwtService } from "@nestjs/jwt";
-import * as argon2 from "argon2";
-import { createHash, randomUUID } from "node:crypto";
-import type { Response } from "express";
-import { PrismaService } from "../../prisma/prisma.service";
-import { RedisService } from "../../redis/redis.service";
-import type { LoginDto } from "./dto/login.dto";
-import { AuditService } from "../audit/audit.service";
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
+import * as argon2 from 'argon2';
+import { createHash, randomUUID } from 'node:crypto';
+import type { Response } from 'express';
+import { PrismaService } from '../../prisma/prisma.service';
+import { RedisService } from '../../redis/redis.service';
+import type { LoginDto } from './dto/login.dto';
+import { AuditService } from '../audit/audit.service';
 
-const REFRESH_COOKIE = "jwt";
+const REFRESH_COOKIE = 'jwt';
 const CODES_CACHE_TTL = 60;
 
 function parseTtlToSeconds(ttl: string, fallback: number): number {
@@ -21,12 +23,12 @@ function parseTtlToSeconds(ttl: string, fallback: number): number {
   const n = Number(m[1]);
   const unit = m[2].toLowerCase();
   const mult =
-    unit === "s" ? 1 : unit === "m" ? 60 : unit === "h" ? 3600 : 86400;
+    unit === 's' ? 1 : unit === 'm' ? 60 : unit === 'h' ? 3600 : 86_400;
   return n * mult;
 }
 
 function sha256(input: string): string {
-  return createHash("sha256").update(input).digest("hex");
+  return createHash('sha256').update(input).digest('hex');
 }
 
 @Injectable()
@@ -40,20 +42,20 @@ export class AuthService {
   ) {}
 
   private cookieOptions() {
-    const secure = this.config.get<boolean>("COOKIE_SECURE") ?? false;
+    const secure = this.config.get<boolean>('COOKIE_SECURE') ?? false;
     const sameSite =
-      (this.config.get<string>("COOKIE_SAME_SITE") as
-        | "lax"
-        | "strict"
-        | "none") ?? "lax";
-    const refreshTtl = this.config.get<string>("JWT_REFRESH_TTL") ?? "7d";
-    const maxAgeSec = parseTtlToSeconds(refreshTtl, 7 * 86400);
+      (this.config.get<string>('COOKIE_SAME_SITE') as
+        | 'lax'
+        | 'strict'
+        | 'none') ?? 'lax';
+    const refreshTtl = this.config.get<string>('JWT_REFRESH_TTL') ?? '7d';
+    const maxAgeSec = parseTtlToSeconds(refreshTtl, 7 * 86_400);
     return {
       httpOnly: true,
       secure,
       sameSite,
       maxAge: maxAgeSec * 1000,
-      path: "/",
+      path: '/',
     } as const;
   }
 
@@ -71,12 +73,99 @@ export class AuthService {
     });
   }
 
+  private failWindowSec(): number {
+    return this.config.get<number>('AUTH_FAIL_WINDOW_SEC') ?? 900;
+  }
+
+  private failUserMax(): number {
+    return (
+      this.config.get<number>('AUTH_FAIL_USER_MAX') ??
+      this.config.get<number>('AUTH_FAIL_MAX') ??
+      5
+    );
+  }
+
+  private failIpMax(): number {
+    return (
+      this.config.get<number>('AUTH_FAIL_IP_MAX') ??
+      this.config.get<number>('AUTH_FAIL_MAX') ??
+      5
+    );
+  }
+
+  /** Plan §: auth:fail:{username|ip} */
+  private userFailKey(username: string): string {
+    return `auth:fail:user:${username.trim().toLowerCase()}`;
+  }
+
+  private ipFailKey(ip: string): string {
+    return `auth:fail:ip:${ip}`;
+  }
+
+  private async readFailCount(key: string): Promise<number> {
+    const raw = await this.redis.get(key);
+    if (!raw) return 0;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  /**
+   * Reject with HTTP 429 when username or IP failure count ≥ threshold.
+   * Redis down → skip lock check (throttler login path is separately fail-closed).
+   */
+  private async assertNotLocked(
+    username: string,
+    ip: string | undefined,
+  ): Promise<void> {
+    const userCount = await this.readFailCount(this.userFailKey(username));
+    const ipCount = ip ? await this.readFailCount(this.ipFailKey(ip)) : 0;
+    if (userCount >= this.failUserMax() || ipCount >= this.failIpMax()) {
+      this.audit.record({
+        action: 'auth.login_locked',
+        module: 'auth',
+        username,
+        status: 429,
+        detail: {
+          reason: 'fail_threshold',
+          userCount,
+          ipCount: ip ? ipCount : undefined,
+        },
+      });
+      this.throwLocked();
+    }
+  }
+
+  private throwLocked(): never {
+    throw new HttpException(
+      {
+        message: 'Too many failed login attempts. Try again later.',
+        error: 'Too Many Requests',
+      },
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
+  }
+
+  private async recordLoginFailure(
+    username: string,
+    ip: string | undefined,
+  ): Promise<void> {
+    const window = this.failWindowSec();
+    await this.redis.incrWithTtl(this.userFailKey(username), window);
+    if (ip) {
+      await this.redis.incrWithTtl(this.ipFailKey(ip), window);
+    }
+  }
+
+  private async clearLoginFailures(username: string): Promise<void> {
+    await this.redis.del(this.userFailKey(username));
+  }
+
   private async signAccess(user: {
     id: string;
     username: string;
     tokenVersion: number;
   }): Promise<string> {
-    const accessTtl = this.config.get<string>("JWT_ACCESS_TTL") ?? "30m";
+    const accessTtl = this.config.get<string>('JWT_ACCESS_TTL') ?? '30m';
     return this.jwt.signAsync(
       {
         sub: user.id,
@@ -84,7 +173,7 @@ export class AuthService {
         tv: user.tokenVersion,
       },
       {
-        secret: this.config.getOrThrow<string>("JWT_ACCESS_SECRET"),
+        secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
         expiresIn: parseTtlToSeconds(accessTtl, 30 * 60),
       },
     );
@@ -93,13 +182,13 @@ export class AuthService {
   private async issueRefresh(
     userId: string,
   ): Promise<{ token: string; jti: string }> {
-    const jti = randomUUID().replace(/-/g, "");
-    const refreshTtl = this.config.get<string>("JWT_REFRESH_TTL") ?? "7d";
-    const expiresInSec = parseTtlToSeconds(refreshTtl, 7 * 86400);
+    const jti = randomUUID().replaceAll('-', '');
+    const refreshTtl = this.config.get<string>('JWT_REFRESH_TTL') ?? '7d';
+    const expiresInSec = parseTtlToSeconds(refreshTtl, 7 * 86_400);
     const token = await this.jwt.signAsync(
       { sub: userId, jti },
       {
-        secret: this.config.getOrThrow<string>("JWT_REFRESH_SECRET"),
+        secret: this.config.getOrThrow<string>('JWT_REFRESH_SECRET'),
         expiresIn: expiresInSec,
       },
     );
@@ -115,9 +204,11 @@ export class AuthService {
     return { token, jti };
   }
 
-  async login(dto: LoginDto, res: Response) {
+  async login(dto: LoginDto, res: Response, ip?: string) {
     const username = dto.username.trim();
     const password = dto.password;
+
+    await this.assertNotLocked(username, ip);
 
     const user = await this.prisma.user.findFirst({
       where: { username, deletedAt: null },
@@ -130,24 +221,29 @@ export class AuthService {
       (await argon2.verify(user.passwordHash, password));
 
     if (!ok || !user) {
+      await this.recordLoginFailure(username, ip);
+      // Re-check after increment so the attempt that crosses the threshold
+      // is already locked for subsequent tries (and this response stays 403).
       this.audit.record({
-        action: "auth.login_failed",
-        module: "auth",
+        action: 'auth.login_failed',
+        module: 'auth',
         username,
         status: 403,
-        detail: { reason: "invalid_credentials" },
+        detail: { reason: 'invalid_credentials' },
       });
       this.clearRefreshCookie(res);
-      throw new ForbiddenException("Username or password is incorrect.");
+      throw new ForbiddenException('Username or password is incorrect.');
     }
+
+    await this.clearLoginFailures(username);
 
     const accessToken = await this.signAccess(user);
     const { token: refreshToken } = await this.issueRefresh(user.id);
     this.setRefreshCookie(res, refreshToken);
 
     this.audit.record({
-      action: "auth.login",
-      module: "auth",
+      action: 'auth.login',
+      module: 'auth',
       userId: user.id,
       username: user.username,
       status: 200,
@@ -161,7 +257,7 @@ export class AuthService {
       username: user.username,
       realName: user.realName,
       roles,
-      homePath: user.homePath ?? "/dashboard/workspace",
+      homePath: user.homePath ?? '/dashboard/workspace',
       accessToken,
     };
   }
@@ -172,17 +268,17 @@ export class AuthService {
   ): Promise<string> {
     if (!refreshCookie) {
       this.clearRefreshCookie(res);
-      throw new ForbiddenException("Forbidden");
+      throw new ForbiddenException('Forbidden');
     }
 
     let payload: { sub: string; jti: string };
     try {
       payload = await this.jwt.verifyAsync(refreshCookie, {
-        secret: this.config.getOrThrow<string>("JWT_REFRESH_SECRET"),
+        secret: this.config.getOrThrow<string>('JWT_REFRESH_SECRET'),
       });
     } catch {
       this.clearRefreshCookie(res);
-      throw new ForbiddenException("Forbidden");
+      throw new ForbiddenException('Forbidden');
     }
 
     const stored = await this.prisma.refreshToken.findUnique({
@@ -196,7 +292,7 @@ export class AuthService {
       stored.userId !== payload.sub
     ) {
       this.clearRefreshCookie(res);
-      throw new ForbiddenException("Forbidden");
+      throw new ForbiddenException('Forbidden');
     }
 
     const user = await this.prisma.user.findFirst({
@@ -204,7 +300,7 @@ export class AuthService {
     });
     if (!user) {
       this.clearRefreshCookie(res);
-      throw new ForbiddenException("Forbidden");
+      throw new ForbiddenException('Forbidden');
     }
 
     await this.prisma.refreshToken.update({
@@ -226,10 +322,12 @@ export class AuthService {
     let logoutUsername: string | undefined;
     if (refreshCookie) {
       try {
-        const payload = await this.jwt.verifyAsync<{ jti: string; sub?: string }>(
-          refreshCookie,
-          { secret: this.config.getOrThrow<string>("JWT_REFRESH_SECRET") },
-        );
+        const payload = await this.jwt.verifyAsync<{
+          jti: string;
+          sub?: string;
+        }>(refreshCookie, {
+          secret: this.config.getOrThrow<string>('JWT_REFRESH_SECRET'),
+        });
         const stored = await this.prisma.refreshToken.findUnique({
           where: { jti: payload.jti },
           select: { userId: true },
@@ -252,14 +350,14 @@ export class AuthService {
       }
     }
     this.audit.record({
-      action: "auth.logout",
-      module: "auth",
+      action: 'auth.logout',
+      module: 'auth',
       userId: logoutUserId ?? null,
       username: logoutUsername ?? null,
       status: 200,
     });
     this.clearRefreshCookie(res);
-    return "";
+    return '';
   }
 
   async getCodes(userId: string): Promise<string[]> {
@@ -282,9 +380,7 @@ export class AuthService {
       },
       include: { permission: true },
     });
-    const codes = Array.from(
-      new Set(rows.map((r) => r.permission.code)),
-    ).sort();
+    const codes = [...new Set(rows.map((r) => r.permission.code))].sort();
     await this.redis.set(cacheKey, JSON.stringify(codes), CODES_CACHE_TTL);
     return codes;
   }

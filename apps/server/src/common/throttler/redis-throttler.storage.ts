@@ -1,20 +1,40 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { ThrottlerStorage } from "@nestjs/throttler";
-import type { ThrottlerStorageRecord } from "@nestjs/throttler/dist/throttler-storage-record.interface";
-import { RedisService } from "../../redis/redis.service";
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import { ThrottlerStorage } from '@nestjs/throttler';
+import type { ThrottlerStorageRecord } from '@nestjs/throttler/dist/throttler-storage-record.interface';
+import { RedisService } from '../../redis/redis.service';
+
+export type RedisThrottlerStorageOptions = {
+  /**
+   * Throttler names that must fail-closed when Redis is down
+   * (login → 503; do not silently allow credential stuffing).
+   * Other names stay fail-open + warn log.
+   */
+  failClosedThrottlers?: string[];
+};
 
 /**
  * Redis-backed ThrottlerStorage (fixed window + optional block).
  * Script adapted from @nest-lab/throttler-storage-redis.
- * On Redis errors: fail-open (allow request) so transient outages
- * do not 500 the whole API; ready probes already surface Redis down.
+ *
+ * Default: fail-open on Redis errors (allow request) so transient
+ * outages do not 500 the whole API; ready probes already surface Redis down.
+ * Login throttler is fail-closed (503) — see failClosedThrottlers.
  */
 @Injectable()
 export class RedisThrottlerStorage implements ThrottlerStorage {
   private readonly logger = new Logger(RedisThrottlerStorage.name);
   private readonly scriptSrc: string;
+  private readonly failClosed: Set<string>;
 
-  constructor(private readonly redis: RedisService) {
+  constructor(
+    private readonly redis: RedisService,
+    options: RedisThrottlerStorageOptions = {},
+  ) {
+    this.failClosed = new Set(options.failClosedThrottlers);
     this.scriptSrc = `
       local hitKey = KEYS[1]
       local blockKey = KEYS[2]
@@ -51,7 +71,7 @@ export class RedisThrottlerStorage implements ThrottlerStorage {
 
       return { totalHits, timeToExpire, isBlocked and 1 or 0, timeToBlockExpire }
     `
-      .replace(/^\s+/gm, "")
+      .replaceAll(/^\s+/gm, '')
       .trim();
   }
 
@@ -78,7 +98,9 @@ export class RedisThrottlerStorage implements ThrottlerStorage {
       )) as unknown[];
 
       if (!Array.isArray(results) || results.length < 4) {
-        throw new TypeError(`Unexpected throttle eval result: ${String(results)}`);
+        throw new TypeError(
+          `Unexpected throttle eval result: ${String(results)}`,
+        );
       }
 
       const totalHits = Number(results[0]);
@@ -92,10 +114,20 @@ export class RedisThrottlerStorage implements ThrottlerStorage {
         isBlocked,
         timeToBlockExpire: Math.ceil(timeToBlockExpireMs / 1000),
       };
-    } catch (err) {
-      this.logger.warn(
-        `Throttle storage failed (fail-open): ${String(err)}`,
-      );
+    } catch (error) {
+      if (error instanceof ServiceUnavailableException) {
+        throw error;
+      }
+      if (this.failClosed.has(throttlerName)) {
+        this.logger.error(
+          `Throttle storage failed (fail-closed for "${throttlerName}"): ${String(error)}`,
+        );
+        throw new ServiceUnavailableException({
+          message: 'Rate limit unavailable',
+          error: 'Service Unavailable',
+        });
+      }
+      this.logger.warn(`Throttle storage failed (fail-open): ${String(error)}`);
       return {
         totalHits: 0,
         timeToExpire: Math.ceil(ttl / 1000),
