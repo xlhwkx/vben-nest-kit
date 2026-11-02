@@ -10,7 +10,8 @@ import type { ApiResponseEnvelope } from '../interfaces/api-response.interface';
 
 /**
  * 统一错误信封（对照 api-contract-vben.md §1.3 / §1.4）。
- * 桩实现：业务失败 code=-1；HTTP 状态尽量保留。
+ * 业务失败 code=-1；HTTP 状态尽量保留。
+ * 非 HttpException（含 Prisma）不回传内部 message/堆栈，避免路径泄漏。
  */
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -42,10 +43,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
         message = exception.message;
         error = exception.message;
       }
-    } else if (exception instanceof Error) {
-      message = exception.message;
-      error = exception.message;
     }
+    // else: keep generic 500 — do not leak Prisma paths / stacks
 
     const envelope: ApiResponseEnvelope<null> = {
       code: -1,
