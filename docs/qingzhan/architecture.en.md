@@ -12,9 +12,11 @@
 | Cache / throttle store | Redis 7 (`ioredis`) |
 | Auth | JWT Bearer + HttpOnly Cookie `jwt` (refresh); Argon2id |
 | Throttle | `@nestjs/throttler` (Redis storage by default) |
-| File storage | Local by default; optional S3-compatible (`STORAGE_DRIVER=s3`) |
+| File storage | Local by default; optional S3-compatible (`STORAGE_DRIVER=s3`). Returned URLs depend on bucket policy or `S3_PUBLIC_URL`; local `/uploads` static is skipped when `s3` |
 | Queue | Optional BullMQ skeleton (`QUEUE_ENABLED=false` by default) |
 | Docs | Swagger `/api/docs` |
+
+> **S3 URLs**: `put` returns `data.url` from `S3_PUBLIC_URL` (preferred) or `endpoint/bucket` / AWS default host. Browser-readable access still depends on bucket policy, CDN, or presigned URLs — not the string alone. With `STORAGE_DRIVER=s3`, the process does not mount local `UPLOAD_DIR` static assets.
 
 ## Dual prefix and envelope
 

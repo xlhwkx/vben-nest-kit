@@ -17,6 +17,10 @@
 - Known gaps：补 **SliderCaptcha** 阻碍 headless UI 登录 / 静默 refresh 自动化勾选；划掉本刀已清项
 
 ### Fixed
+- Local storage：`put` 拒绝 `..` / 绝对路径穿越；单测覆盖
+- `STORAGE_DRIVER=s3` 时跳过本地 `useStaticAssets(/uploads)`
+- 文档：`S3_PUBLIC_URL` / 桶策略决定返回 URL 是否可读
+- Queue stub Worker：日志仅 id+name，不再 `JSON.stringify(job.data)`
 - Upload：`MulterModule.registerAsync` 经 `ConfigService` 读 `UPLOAD_MAX_BYTES`（避免装饰器求值时 env 未加载）
 - 技术方案 Redis 键名与实现对齐：`auth:fail:user:…` / `auth:fail:ip:…`
 - 文档明确 `THROTTLE_STORAGE=memory` 下无登录 Redis fail-closed；`auth:fail` 在 Redis 宕时 fail-open

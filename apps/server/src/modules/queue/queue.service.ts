@@ -125,10 +125,11 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
     if (!this.connection) return;
     const prefix = this.config.get<string>('QUEUE_PREFIX') ?? 'qingzhan';
 
+    // Stub only: log id+name. When wiring real mail/archive, log redacted fields only — never full job.data.
     const mailWorker = new Worker(
       QUEUE_NAMES.mail,
       async (job: Job) => {
-        this.logger.debug(`mail job ${job.id} (stub): ${JSON.stringify(job.data)}`);
+        this.logger.debug(`mail job id=${job.id} name=${job.name} (stub)`);
       },
       { connection: this.connection, prefix },
     );
@@ -136,7 +137,7 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
       QUEUE_NAMES.auditArchive,
       async (job: Job) => {
         this.logger.debug(
-          `audit-archive job ${job.id} (stub): ${JSON.stringify(job.data)}`,
+          `audit-archive job id=${job.id} name=${job.name} (stub)`,
         );
       },
       { connection: this.connection, prefix },

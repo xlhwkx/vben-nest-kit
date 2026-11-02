@@ -9,6 +9,7 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
+import { assertSafeObjectKey } from './object-key';
 import type {
   PutObjectInput,
   PutObjectResult,
@@ -66,11 +67,12 @@ export class S3StorageProvider implements StorageProvider, OnModuleInit {
   }
 
   async put(input: PutObjectInput): Promise<PutObjectResult> {
+    const safeKey = assertSafeObjectKey(input.key);
     try {
       await this.client.send(
         new PutObjectCommand({
           Bucket: this.bucket,
-          Key: input.key,
+          Key: safeKey,
           Body: input.body,
           ContentType: input.contentType,
         }),
@@ -79,6 +81,6 @@ export class S3StorageProvider implements StorageProvider, OnModuleInit {
       this.logger.error(`S3 put failed: ${String(err)}`);
       throw new ServiceUnavailableException('Object storage unavailable');
     }
-    return { url: `${this.publicBaseUrl}/${input.key}` };
+    return { url: `${this.publicBaseUrl}/${safeKey}` };
   }
 }

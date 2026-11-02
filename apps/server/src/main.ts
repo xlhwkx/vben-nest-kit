@@ -34,21 +34,30 @@ async function bootstrap() {
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });
 
-  const uploadDir = path.resolve(
-    config.get<string>("UPLOAD_DIR") ?? path.join(process.cwd(), "uploads"),
-  );
-  const uploadPublicPath = (
-    config.get<string>("UPLOAD_PUBLIC_PATH") ?? "/uploads"
-  ).replace(/\/$/, "");
-  app.useStaticAssets(uploadDir, {
-    prefix: `${uploadPublicPath}/`,
-    setHeaders: (res, filePath) => {
-      res.setHeader("X-Content-Type-Options", "nosniff");
-      if (path.extname(filePath).toLowerCase() === ".svg") {
-        res.setHeader("Content-Disposition", "attachment");
-      }
-    },
-  });
+  // Local disk uploads only; S3 objects are not under UPLOAD_DIR.
+  const storageDriver = config.get<string>("STORAGE_DRIVER") ?? "local";
+  if (storageDriver === "local") {
+    const uploadDir = path.resolve(
+      config.get<string>("UPLOAD_DIR") ?? path.join(process.cwd(), "uploads"),
+    );
+    const uploadPublicPath = (
+      config.get<string>("UPLOAD_PUBLIC_PATH") ?? "/uploads"
+    ).replace(/\/$/, "");
+    app.useStaticAssets(uploadDir, {
+      prefix: `${uploadPublicPath}/`,
+      setHeaders: (res, filePath) => {
+        res.setHeader("X-Content-Type-Options", "nosniff");
+        if (path.extname(filePath).toLowerCase() === ".svg") {
+          res.setHeader("Content-Disposition", "attachment");
+        }
+      },
+    });
+  } else {
+    Logger.log(
+      `Skipping local /uploads static assets (STORAGE_DRIVER=${storageDriver})`,
+      "Bootstrap",
+    );
+  }
 
   // Vben 兼容别名：/api/* ；正式版本：/api/v1/*
   app.setGlobalPrefix("api");

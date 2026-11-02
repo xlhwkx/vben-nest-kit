@@ -12,9 +12,11 @@
 | 缓存 / 限流存储 | Redis 7（`ioredis`） |
 | 鉴权 | JWT Bearer + HttpOnly Cookie `jwt`（refresh）；Argon2id |
 | 限流 | `@nestjs/throttler`（默认 Redis storage） |
-| 文件存储 | 默认 Local；可选 S3 兼容（`STORAGE_DRIVER=s3`） |
+| 文件存储 | 默认 Local；可选 S3 兼容（`STORAGE_DRIVER=s3`）。返回 URL 依赖桶策略或 `S3_PUBLIC_URL`；`s3` 时不挂本地 `/uploads` static |
 | 队列 | BullMQ 可选骨架（默认 `QUEUE_ENABLED=false`） |
 | 文档 | Swagger `/api/docs` |
+
+> **S3 URL**：`put` 返回的 `data.url` 由 `S3_PUBLIC_URL`（优先）或 `endpoint/bucket` / AWS 默认域名拼接；对象是否可被浏览器匿名读取取决于桶策略、CDN 或预签名，不单由 URL 字符串决定。`STORAGE_DRIVER=s3` 时进程不挂载本地 `UPLOAD_DIR` 静态目录。
 
 ## 双前缀与信封
 

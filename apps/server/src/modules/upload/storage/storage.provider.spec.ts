@@ -1,5 +1,7 @@
+import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { LocalStorageProvider } from './local.storage';
+import { assertSafeObjectKey, resolveUnderRoot } from './object-key';
 import { promises as fs } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -34,6 +36,51 @@ describe('StorageProvider (local default)', () => {
     expect(Buffer.compare(saved, body)).toBe(0);
 
     await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it('rejects path traversal keys (.. / absolute)', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'qz-upload-'));
+    const config = {
+      get: (key: string) => {
+        const map: Record<string, string> = {
+          UPLOAD_DIR: dir,
+          UPLOAD_PUBLIC_PATH: '/uploads',
+          APP_PUBLIC_URL: 'http://localhost:5320',
+        };
+        return map[key];
+      },
+    } as unknown as ConfigService;
+    const local = new LocalStorageProvider(config);
+    await local.onModuleInit();
+
+    const body = Buffer.from('x');
+    for (const key of [
+      '../evil.bin',
+      '2026/../../evil.bin',
+      '/etc/passwd',
+      '..\\evil.bin',
+      'a/./b.bin',
+      '',
+    ]) {
+      await expect(
+        local.put({ key, body, contentType: 'application/octet-stream' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    }
+
+    // Nothing escaped outside upload root
+    const outside = path.join(dir, '..', 'evil.bin');
+    await expect(fs.access(outside)).rejects.toBeTruthy();
+
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it('assertSafeObjectKey / resolveUnderRoot helpers', () => {
+    expect(assertSafeObjectKey('2026/11/a.png')).toBe('2026/11/a.png');
+    expect(() => assertSafeObjectKey('../x')).toThrow(BadRequestException);
+    expect(() => assertSafeObjectKey('/abs')).toThrow(BadRequestException);
+    const root = path.resolve('/tmp/qz-root');
+    const abs = resolveUnderRoot(root, 'a/b.png');
+    expect(abs.startsWith(root)).toBe(true);
   });
 
   it('STORAGE_DRIVER default is local (env schema)', async () => {

@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
+import { assertSafeObjectKey, resolveUnderRoot } from './object-key';
 import type {
   PutObjectInput,
   PutObjectResult,
@@ -42,10 +43,11 @@ export class LocalStorageProvider implements StorageProvider, OnModuleInit {
   }
 
   async put(input: PutObjectInput): Promise<PutObjectResult> {
-    const absFile = path.join(this.uploadDir, ...input.key.split('/'));
+    const safeKey = assertSafeObjectKey(input.key);
+    const absFile = resolveUnderRoot(this.uploadDir, safeKey);
     await fs.mkdir(path.dirname(absFile), { recursive: true });
     await fs.writeFile(absFile, input.body, { flag: 'wx' });
-    const urlPath = `${this.publicPath}/${input.key}`;
+    const urlPath = `${this.publicPath}/${safeKey}`;
     return { url: `${this.publicBaseUrl}${urlPath}` };
   }
 }
