@@ -7,6 +7,7 @@ import {
 import { Prisma } from "../../../generated/prisma/client";
 import { PrismaService } from "../../../prisma/prisma.service";
 import { RedisService } from "../../../redis/redis.service";
+import { AuditService } from "../../audit/audit.service";
 
 export type SystemRoleItem = {
   id: string;
@@ -63,6 +64,7 @@ export class SystemRoleService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    private readonly audit: AuditService,
   ) {}
 
   async list(
@@ -157,6 +159,12 @@ export class SystemRoleService {
       });
     });
 
+    this.audit.record({
+      action: "system.role.create",
+      module: "system.role",
+      status: 200,
+      detail: { id: row.id, code: row.code },
+    });
     return this.toItem(row);
   }
 
@@ -213,6 +221,12 @@ export class SystemRoleService {
       await this.clearPermCacheForRole(id);
     }
 
+    this.audit.record({
+      action: "system.role.update",
+      module: "system.role",
+      status: 200,
+      detail: { id: row.id, code: row.code },
+    });
     return this.toItem(row);
   }
 
@@ -225,6 +239,12 @@ export class SystemRoleService {
 
     await this.clearPermCacheForRole(id);
     await this.prisma.role.delete({ where: { id } });
+    this.audit.record({
+      action: "system.role.delete",
+      module: "system.role",
+      status: 200,
+      detail: { id },
+    });
     return { id };
   }
 

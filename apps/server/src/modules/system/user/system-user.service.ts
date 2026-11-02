@@ -8,6 +8,7 @@ import * as argon2 from "argon2";
 import { Prisma } from "../../../generated/prisma/client";
 import { PrismaService } from "../../../prisma/prisma.service";
 import { RedisService } from "../../../redis/redis.service";
+import { AuditService } from "../../audit/audit.service";
 
 export type SystemUserItem = {
   id: string;
@@ -108,6 +109,7 @@ export class SystemUserService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    private readonly audit: AuditService,
   ) {}
 
   async list(
@@ -228,6 +230,12 @@ export class SystemUserService {
           include: { roles: { select: { roleId: true } } },
         });
       });
+      this.audit.record({
+        action: "system.user.create",
+        module: "system.user",
+        status: 200,
+        detail: { id: row.id, username: row.username },
+      });
       return this.toItem(row);
     } catch (err) {
       if (isUniqueViolation(err)) {
@@ -345,6 +353,16 @@ export class SystemUserService {
         await this.redis.del(`perm:codes:${id}`);
       }
 
+      this.audit.record({
+        action: "system.user.update",
+        module: "system.user",
+        status: 200,
+        detail: {
+          id: row.id,
+          username: row.username,
+          fields: Object.keys(input).filter((k) => k !== "password"),
+        },
+      });
       return this.toItem(row);
     } catch (err) {
       if (isUniqueViolation(err)) {
@@ -375,6 +393,12 @@ export class SystemUserService {
       });
     });
     await this.redis.del(`perm:codes:${id}`);
+    this.audit.record({
+      action: "system.user.delete",
+      module: "system.user",
+      status: 200,
+      detail: { id, username: existing.username },
+    });
     return { id };
   }
 

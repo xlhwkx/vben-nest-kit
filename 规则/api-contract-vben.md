@@ -685,6 +685,7 @@ Nest 健康检查（技术方案）：`GET /api/v1/health/live`、`/ready` —�
 | 版本 | 日期 | 说明 |
 |------|------|------|
 | 1.0.0 | 2026-11-02 | 首版：对照 `vue-vben-admin` main 的 `backend-mock` + `web-antd` 请求层落稿 |
+| 1.0.1 | 2026-11-02 | Nest-only：`GET /api[/v1]/system/audit/list`（审计分页；无 mock 对照） |
 
 ---
 

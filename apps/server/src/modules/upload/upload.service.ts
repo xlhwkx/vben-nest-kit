@@ -10,6 +10,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import * as path from "node:path";
 import type { Express } from "express";
+import { AuditService } from "../audit/audit.service";
 
 // SVG (image/svg+xml) omitted by default (XSS); allow via UPLOAD_ALLOWED_MIME.
 const DEFAULT_ALLOWED = new Set([
@@ -49,7 +50,10 @@ export class UploadService implements OnModuleInit {
   private maxBytes!: number;
   private allowedMimes!: Set<string>;
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly audit: AuditService,
+  ) {}
 
   async onModuleInit(): Promise<void> {
     this.uploadDir = path.resolve(
@@ -119,6 +123,13 @@ export class UploadService implements OnModuleInit {
     this.logger.debug(`saved ${relDir}/${name} sha256=${sha} mime=${mime}`);
 
     const urlPath = `${this.publicPath}/${relDir}/${name}`;
-    return { url: `${this.publicBaseUrl}${urlPath}` };
+    const url = `${this.publicBaseUrl}${urlPath}`;
+    this.audit.record({
+      action: "upload.create",
+      module: "upload",
+      status: 200,
+      detail: { mime, name: `${relDir}/${name}` },
+    });
+    return { url };
   }
 }

@@ -92,7 +92,15 @@ pnpm run build && pnpm run start:prod
 > 本机若 5432/6379 已被占用，`.env.example` 默认宿主端口为 **55433**（PG）/ **56379**（Redis）。
 
 
-下一刀：审计日志模块；前端联调改 Vben baseURL（可选）。Swagger 已开：`/api/docs`。
+### Audit（Nest-only）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/system/audit/list` | Bearer + `System:Audit:List`；分页 `items`+`total`；双前缀 `/api` 与 `/api/v1` |
+
+Auth 登录成功/失败/登出与 System 写操作会异步落 `audit_logs`；响应带头 `x-request-id`。
+
+下一刀：前端联调改 Vben baseURL（可选）。Swagger 已开：`/api/docs`。
 
 上游 Vben 文档见 `README.vben.md` / `README.zh-CN.md`。
 

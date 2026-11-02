@@ -7,6 +7,7 @@ import cookieParser = require("cookie-parser");
 import * as path from "node:path";
 import { AppModule } from "./app.module";
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
+import { requestIdMiddleware } from "./common/middleware/request-id.middleware";
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -14,6 +15,7 @@ async function bootstrap() {
 
   app.set("trust proxy", 1);
   app.use(cookieParser());
+  app.use(requestIdMiddleware);
 
   const origins = config.get<string[]>("corsOrigins") ?? [
     "http://localhost:5173",
@@ -27,6 +29,7 @@ async function bootstrap() {
       "Accept",
       "Accept-Language",
       "X-Requested-With",
+      "X-Request-Id",
     ],
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });

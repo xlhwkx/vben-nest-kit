@@ -6,6 +6,7 @@ import {
 } from "@nestjs/common";
 import { Prisma } from "../../../generated/prisma/client";
 import { PrismaService } from "../../../prisma/prisma.service";
+import { AuditService } from "../../audit/audit.service";
 
 const MENU_TYPES = ["catalog", "menu", "button", "embedded", "link"] as const;
 export type MenuType = (typeof MENU_TYPES)[number];
@@ -82,7 +83,10 @@ function toAdminNode(row: MenuRow): SystemMenuNode {
 
 @Injectable()
 export class SystemMenuService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   /** Full admin tree (all non-deleted menus, including buttons). */
   async list(): Promise<SystemMenuNode[]> {
@@ -149,6 +153,12 @@ export class SystemMenuService {
         sortOrder,
       },
     });
+    this.audit.record({
+      action: "system.menu.create",
+      module: "system.menu",
+      status: 200,
+      detail: { id: row.id, name: row.name },
+    });
     return toAdminNode(row);
   }
 
@@ -195,6 +205,12 @@ export class SystemMenuService {
         sortOrder,
       },
     });
+    this.audit.record({
+      action: "system.menu.update",
+      module: "system.menu",
+      status: 200,
+      detail: { id: row.id, name: row.name },
+    });
     return toAdminNode(row);
   }
 
@@ -220,6 +236,12 @@ export class SystemMenuService {
         });
       }),
     );
+    this.audit.record({
+      action: "system.menu.delete",
+      module: "system.menu",
+      status: 200,
+      detail: { id },
+    });
     return { id };
   }
 

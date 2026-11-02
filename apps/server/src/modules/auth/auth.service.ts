@@ -10,6 +10,7 @@ import type { Response } from "express";
 import { PrismaService } from "../../prisma/prisma.service";
 import { RedisService } from "../../redis/redis.service";
 import type { LoginDto } from "./dto/login.dto";
+import { AuditService } from "../audit/audit.service";
 
 const REFRESH_COOKIE = "jwt";
 const CODES_CACHE_TTL = 60;
@@ -35,6 +36,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly redis: RedisService,
+    private readonly audit: AuditService,
   ) {}
 
   private cookieOptions() {
@@ -128,6 +130,13 @@ export class AuthService {
       (await argon2.verify(user.passwordHash, password));
 
     if (!ok || !user) {
+      this.audit.record({
+        action: "auth.login_failed",
+        module: "auth",
+        username,
+        status: 403,
+        detail: { reason: "invalid_credentials" },
+      });
       this.clearRefreshCookie(res);
       throw new ForbiddenException("Username or password is incorrect.");
     }
@@ -135,6 +144,15 @@ export class AuthService {
     const accessToken = await this.signAccess(user);
     const { token: refreshToken } = await this.issueRefresh(user.id);
     this.setRefreshCookie(res, refreshToken);
+
+    this.audit.record({
+      action: "auth.login",
+      module: "auth",
+      userId: user.id,
+      username: user.username,
+      status: 200,
+      detail: { userId: user.id },
+    });
 
     const roles = user.roles.map((r) => r.role.code);
     return {
@@ -204,12 +222,27 @@ export class AuthService {
     refreshCookie: string | undefined,
     res: Response,
   ): Promise<string> {
+    let logoutUserId: string | undefined;
+    let logoutUsername: string | undefined;
     if (refreshCookie) {
       try {
-        const payload = await this.jwt.verifyAsync<{ jti: string }>(
+        const payload = await this.jwt.verifyAsync<{ jti: string; sub?: string }>(
           refreshCookie,
           { secret: this.config.getOrThrow<string>("JWT_REFRESH_SECRET") },
         );
+        const stored = await this.prisma.refreshToken.findUnique({
+          where: { jti: payload.jti },
+          select: { userId: true },
+        });
+        const userId = stored?.userId ?? payload.sub;
+        if (userId) {
+          logoutUserId = userId;
+          const u = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: { username: true },
+          });
+          logoutUsername = u?.username;
+        }
         await this.prisma.refreshToken.updateMany({
           where: { jti: payload.jti, revokedAt: null },
           data: { revokedAt: new Date() },
@@ -218,6 +251,13 @@ export class AuthService {
         // ignore invalid cookie on logout
       }
     }
+    this.audit.record({
+      action: "auth.logout",
+      module: "auth",
+      userId: logoutUserId ?? null,
+      username: logoutUsername ?? null,
+      status: 200,
+    });
     this.clearRefreshCookie(res);
     return "";
   }

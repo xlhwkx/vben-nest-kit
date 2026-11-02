@@ -209,6 +209,9 @@ const DICT_WRITE_CODES = [
   "System:Dict:Delete",
 ] as const;
 
+/** System Audit list - granted to super/admin only (not user/jack) */
+const AUDIT_LIST_CODES = ["System:Audit:List"] as const;
+
 const SHARED_MENU_NAMES = new Set([
   "Dashboard",
   "Analytics",
@@ -464,6 +467,34 @@ async function main() {
     }
   }
   console.log(`  ok dict write perms for super/admin: ${DICT_WRITE_CODES.join(", ")}`);
+
+  // Grant System Audit list to super + admin only
+  const auditListRoleCodes = ["super", "admin"] as const;
+  for (const code of AUDIT_LIST_CODES) {
+    const perm = await prisma.permission.upsert({
+      where: { code },
+      update: { name: code },
+      create: { code, name: code },
+    });
+    for (const roleCode of auditListRoleCodes) {
+      const roleId = roleIds.get(roleCode);
+      if (!roleId) continue;
+      await prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: { roleId, permissionId: perm.id },
+        },
+        update: {},
+        create: { roleId, permissionId: perm.id },
+      });
+    }
+    const userRoleId = roleIds.get("user");
+    if (userRoleId) {
+      await prisma.rolePermission.deleteMany({
+        where: { roleId: userRoleId, permissionId: perm.id },
+      });
+    }
+  }
+  console.log(`  ok audit list perms for super/admin: ${AUDIT_LIST_CODES.join(", ")}`);
 
   const menuByName = new Map<string, string>();
   await upsertMenuTree(MENU_TREE, null, menuByName);

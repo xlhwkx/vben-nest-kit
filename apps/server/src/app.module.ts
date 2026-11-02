@@ -12,6 +12,7 @@ import { MenuModule } from "./modules/menu/menu.module";
 import { SystemModule } from "./modules/system/system.module";
 import { UserModule } from "./modules/user/user.module";
 import { UploadModule } from "./modules/upload/upload.module";
+import { AuditModule } from "./modules/audit/audit.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { RedisModule } from "./redis/redis.module";
 
@@ -30,6 +31,7 @@ import { RedisModule } from "./redis/redis.module";
     MenuModule,
     SystemModule,
     UploadModule,
+    AuditModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

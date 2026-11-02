@@ -11,6 +11,7 @@ import type { Request } from "express";
 import { IS_PUBLIC_KEY } from "../decorators/public.decorator";
 import type { AuthUser } from "../decorators/current-user.decorator";
 import { PrismaService } from "../../prisma/prisma.service";
+import { setRequestUser } from "../request-context";
 
 type AccessPayload = {
   sub: string;
@@ -65,6 +66,7 @@ export class JwtAuthGuard implements CanActivate {
       username: user.username,
       tokenVersion: user.tokenVersion,
     };
+    setRequestUser({ userId: user.id, username: user.username });
     return true;
   }
 }

@@ -179,3 +179,24 @@ model DictItem {
   @@index([status])
   @@map("dict_items")
 }
+
+model AuditLog {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  userId    String?  @map("user_id") @db.Uuid
+  username  String?  @db.VarChar(64)
+  action    String   @db.VarChar(128)
+  module    String?  @db.VarChar(64)
+  method    String?  @db.VarChar(16)
+  path      String?  @db.VarChar(512)
+  ip        String?  @db.VarChar(64)
+  userAgent String?  @map("user_agent") @db.VarChar(512)
+  requestId String?  @map("request_id") @db.VarChar(128)
+  status    Int?
+  detail    Json?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([createdAt])
+  @@index([userId])
+  @@index([action])
+  @@map("audit_logs")
+}

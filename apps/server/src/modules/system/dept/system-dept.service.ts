@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { PrismaService } from "../../../prisma/prisma.service";
+import { AuditService } from "../../audit/audit.service";
 
 export type SystemDeptNode = {
   id: string;
@@ -73,7 +74,10 @@ function toNode(row: DeptRow): SystemDeptNode {
 
 @Injectable()
 export class SystemDeptService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   /** Non-paginated admin tree (all non-deleted depts). */
   async list(): Promise<SystemDeptNode[]> {
@@ -100,6 +104,12 @@ export class SystemDeptService {
         status: input.status === 0 ? 0 : 1,
         remark: input.remark?.trim() || null,
       },
+    });
+    this.audit.record({
+      action: "system.dept.create",
+      module: "system.dept",
+      status: 200,
+      detail: { id: row.id, name: row.name },
     });
     return toNode(row);
   }
@@ -137,6 +147,12 @@ export class SystemDeptService {
             : input.remark?.trim() || null,
       },
     });
+    this.audit.record({
+      action: "system.dept.update",
+      module: "system.dept",
+      status: 200,
+      detail: { id: row.id, name: row.name },
+    });
     return toNode(row);
   }
 
@@ -164,6 +180,12 @@ export class SystemDeptService {
     await this.prisma.dept.update({
       where: { id },
       data: { deletedAt: now, status: 0 },
+    });
+    this.audit.record({
+      action: "system.dept.delete",
+      module: "system.dept",
+      status: 200,
+      detail: { id },
     });
     return { id };
   }

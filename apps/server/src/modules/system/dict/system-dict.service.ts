@@ -7,6 +7,7 @@ import {
 import { Prisma } from "../../../generated/prisma/client";
 import { PrismaService } from "../../../prisma/prisma.service";
 import { RedisService } from "../../../redis/redis.service";
+import { AuditService } from "../../audit/audit.service";
 
 const DICT_VERSION_KEY = "qingzhan:dict:version";
 
@@ -146,6 +147,7 @@ export class SystemDictService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    private readonly audit: AuditService,
   ) {}
 
   async getVersion(): Promise<number> {
@@ -265,6 +267,12 @@ export class SystemDictService {
         },
       });
       await this.bumpVersion();
+      this.audit.record({
+        action: "system.dict.create",
+        module: "system.dict",
+        status: 200,
+        detail: { kind: "type", id: row.id, code: row.code },
+      });
       return toTypeItem(row);
     } catch (err) {
       if (isP2002(err)) throw new ConflictException("Dict code already exists");
@@ -303,6 +311,12 @@ export class SystemDictService {
         data,
       });
       await this.bumpVersion();
+      this.audit.record({
+        action: "system.dict.update",
+        module: "system.dict",
+        status: 200,
+        detail: { kind: "type", id: row.id, code: row.code },
+      });
       return toTypeItem(row);
     } catch (err) {
       if (isP2002(err)) throw new ConflictException("Dict code already exists");
@@ -314,6 +328,12 @@ export class SystemDictService {
     await this.requireType(id);
     await this.prisma.dictType.delete({ where: { id } });
     await this.bumpVersion();
+    this.audit.record({
+      action: "system.dict.delete",
+      module: "system.dict",
+      status: 200,
+      detail: { kind: "type", id },
+    });
     return null;
   }
 
@@ -373,6 +393,12 @@ export class SystemDictService {
       },
     });
     await this.bumpVersion();
+    this.audit.record({
+      action: "system.dict.create",
+      module: "system.dict",
+      status: 200,
+      detail: { kind: "data", id: row.id, dictCode: row.dictCode },
+    });
     return toDataItem(row);
   }
 
@@ -408,6 +434,12 @@ export class SystemDictService {
       data,
     });
     await this.bumpVersion();
+    this.audit.record({
+      action: "system.dict.update",
+      module: "system.dict",
+      status: 200,
+      detail: { kind: "data", id: row.id, dictCode: row.dictCode },
+    });
     return toDataItem(row);
   }
 
@@ -415,6 +447,12 @@ export class SystemDictService {
     await this.requireData(id);
     await this.prisma.dictItem.delete({ where: { id } });
     await this.bumpVersion();
+    this.audit.record({
+      action: "system.dict.delete",
+      module: "system.dict",
+      status: 200,
+      detail: { kind: "data", id },
+    });
     return null;
   }
 
