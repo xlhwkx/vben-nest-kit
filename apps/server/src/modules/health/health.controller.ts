@@ -1,10 +1,12 @@
 import { Controller, Get, VERSION_NEUTRAL } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import { SkipThrottle } from "@nestjs/throttler";
 import { Public } from "../../common/decorators/public.decorator";
 import { HealthService } from "./health.service";
 
 @ApiTags("Health")
 @Public()
+@SkipThrottle()
 @Controller({ path: "health", version: [VERSION_NEUTRAL, "1"] })
 export class HealthController {
   constructor(private readonly health: HealthService) {}

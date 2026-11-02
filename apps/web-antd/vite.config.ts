@@ -9,7 +9,7 @@ export default defineConfig(async () => {
           '/api': {
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/api/, ''),
-            // mock代理目标地址
+            // Nest 后端（apps/server，默认 5320）
             target: 'http://localhost:5320/api',
             ws: true,
           },

@@ -100,6 +100,10 @@ pnpm run build && pnpm run start:prod
 
 Auth 登录成功/失败/登出与 System 写操作会异步落 `audit_logs`；响应带头 `x-request-id`。
 
+### 限流
+
+`@nestjs/throttler`：全局默认 120 次/60s；`POST /auth/login` 更严（默认 10 次/60s）→ 429。存储默认 Redis（`THROTTLE_STORAGE`，见 `apps/server/.env.example`）。Health 跳过限流。
+
 ## 前端联调（web-antd ↔ Nest）
 
 官方联调路径只改 **web-antd**（其它 `web-*` 同理：关 Nitro mock + `accessMode: 'backend'` + proxy 指向 Nest）。
@@ -134,3 +138,4 @@ Demo 账号（密码均为 `123456`）：`vben`（super）/ `admin` / `jack`（u
 Swagger：`http://localhost:5320/api/docs`。合同验收清单：`规则/api-contract-vben.md` §11。
 
 上游 Vben 文档见 `README.vben.md` / `README.zh-CN.md`。
+

@@ -30,6 +30,16 @@ const envSchema = z.object({
   UPLOAD_ALLOWED_MIME: z.string().optional(),
   /** production 默认关；非 production 默认开；设 true/false 可强制 */
   SWAGGER_ENABLED: boolish,
+  /** 全局限流窗口（毫秒） */
+  THROTTLE_TTL_MS: z.coerce.number().default(60_000),
+  /** 全局限流：窗口内每 IP 最大请求数 */
+  THROTTLE_LIMIT: z.coerce.number().default(120),
+  /** 登录限流窗口（毫秒） */
+  THROTTLE_LOGIN_TTL_MS: z.coerce.number().default(60_000),
+  /** 登录限流：窗口内每 IP 最大次数（更严） */
+  THROTTLE_LOGIN_LIMIT: z.coerce.number().default(10),
+  /** redis（默认，多实例一致）| memory（单机急救） */
+  THROTTLE_STORAGE: z.enum(["redis", "memory"]).default("redis"),
 });
 
 export type AppEnv = z.infer<typeof envSchema> & {

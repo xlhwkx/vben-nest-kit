@@ -36,6 +36,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /** Raw ioredis client (throttler storage / advanced ops). */
+  getClient(): Redis {
+    return this.client;
+  }
+
   /** True when Redis answered a recent ping / successful command. */
   async ping(): Promise<boolean> {
     if (!this.client) return false;
