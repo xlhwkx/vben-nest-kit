@@ -149,6 +149,11 @@ export class SystemDictService {
   ) {}
 
   async getVersion(): Promise<number> {
+    // Redis down: never return a sticky `1` (would freeze frontend dict cache).
+    const reachable = await this.redis.ping();
+    if (!reachable) {
+      return Date.now();
+    }
     const raw = await this.redis.get(DICT_VERSION_KEY);
     const n = Number.parseInt(raw ?? "", 10);
     if (Number.isFinite(n) && n >= 1) return n;

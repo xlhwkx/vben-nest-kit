@@ -4,9 +4,10 @@ import {
   ExceptionFilter,
   HttpException,
   HttpStatus,
-} from '@nestjs/common';
-import type { Response } from 'express';
-import type { ApiResponseEnvelope } from '../interfaces/api-response.interface';
+} from "@nestjs/common";
+import type { Response } from "express";
+import { MulterError } from "multer";
+import type { ApiResponseEnvelope } from "../interfaces/api-response.interface";
 
 /**
  * 统一错误信封（对照 api-contract-vben.md §1.3 / §1.4）。
@@ -20,29 +21,39 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
-    let message = 'Internal server error';
+    let message = "Internal server error";
     let error: string | null = message;
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
       const body = exception.getResponse();
-      if (typeof body === 'string') {
+      if (typeof body === "string") {
         message = body;
         error = body;
-      } else if (typeof body === 'object' && body !== null) {
+      } else if (typeof body === "object" && body !== null) {
         const obj = body as Record<string, unknown>;
         const msg = obj.message;
         message = Array.isArray(msg)
-          ? msg.join(', ')
-          : typeof msg === 'string'
+          ? msg.join(", ")
+          : typeof msg === "string"
             ? msg
             : exception.message;
         error =
-          typeof obj.error === 'string' ? obj.error : exception.message;
+          typeof obj.error === "string" ? obj.error : exception.message;
       } else {
         message = exception.message;
         error = exception.message;
       }
+    } else if (exception instanceof MulterError) {
+      status =
+        exception.code === "LIMIT_FILE_SIZE"
+          ? HttpStatus.PAYLOAD_TOO_LARGE
+          : HttpStatus.BAD_REQUEST;
+      message =
+        exception.code === "LIMIT_FILE_SIZE"
+          ? "File too large"
+          : "Upload failed";
+      error = message;
     }
     // else: keep generic 500 — do not leak Prisma paths / stacks
 

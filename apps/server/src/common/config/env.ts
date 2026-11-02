@@ -3,6 +3,7 @@ import { z } from "zod";
 const envSchema = z.object({
   NODE_ENV: z.string().default("development"),
   APP_PORT: z.coerce.number().default(5320),
+  APP_PUBLIC_URL: z.string().default("http://localhost:5320"),
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1),
   JWT_ACCESS_SECRET: z.string().min(32),
@@ -15,6 +16,10 @@ const envSchema = z.object({
     .transform((v) => v === "true" || v === "1"),
   COOKIE_SAME_SITE: z.enum(["lax", "strict", "none"]).default("lax"),
   CORS_ORIGINS: z.string().default("http://localhost:5173"),
+  UPLOAD_DIR: z.string().optional(),
+  UPLOAD_PUBLIC_PATH: z.string().default("/uploads"),
+  UPLOAD_MAX_BYTES: z.coerce.number().default(5_242_880),
+  UPLOAD_ALLOWED_MIME: z.string().optional(),
 });
 
 export type AppEnv = z.infer<typeof envSchema> & {

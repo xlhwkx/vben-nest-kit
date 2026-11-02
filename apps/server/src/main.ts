@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
 import { NestExpressApplication } from "@nestjs/platform-express";
 import cookieParser = require("cookie-parser");
+import * as path from "node:path";
 import { AppModule } from "./app.module";
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
 
@@ -29,6 +30,16 @@ async function bootstrap() {
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });
 
+  const uploadDir = path.resolve(
+    config.get<string>("UPLOAD_DIR") ?? path.join(process.cwd(), "uploads"),
+  );
+  const uploadPublicPath = (
+    config.get<string>("UPLOAD_PUBLIC_PATH") ?? "/uploads"
+  ).replace(/\/$/, "");
+  app.useStaticAssets(uploadDir, {
+    prefix: `${uploadPublicPath}/`,
+  });
+
   // Vben 兼容别名：/api/* ；正式版本：/api/v1/*
   app.setGlobalPrefix("api");
   app.enableVersioning({
@@ -38,11 +49,9 @@ async function bootstrap() {
 
   app.useGlobalFilters(new HttpExceptionFilter());
 
-  // Health is public — mark via @Public on controller
   const port = Number(config.get("APP_PORT") ?? 5320);
   await app.listen(port);
   Logger.log(`青栈 server listening on http://localhost:${port}/api`, "Bootstrap");
 }
 
 void bootstrap();
-

@@ -11,6 +11,7 @@ import { HealthModule } from "./modules/health/health.module";
 import { MenuModule } from "./modules/menu/menu.module";
 import { SystemModule } from "./modules/system/system.module";
 import { UserModule } from "./modules/user/user.module";
+import { UploadModule } from "./modules/upload/upload.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { RedisModule } from "./redis/redis.module";
 
@@ -28,6 +29,7 @@ import { RedisModule } from "./redis/redis.module";
     UserModule,
     MenuModule,
     SystemModule,
+    UploadModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
