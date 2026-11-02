@@ -71,3 +71,8 @@ apps/server/coverage
 
 apps/server/node_modules
 apps/server/pnpm-lock.yaml
+
+# 本地冒烟日志
+apps/server/_smoke*
+_smoke*
+
