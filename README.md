@@ -9,6 +9,7 @@
 ```
 vben-nest-kit/
 ├── 规则/                      # 真源：技术方案 + API 合同（优先于口头约定）
+├── docs/qingzhan/               # 青栈架构/贡献（中英；VitePress 仍在 docs/src）
 ├── apps/
 │   ├── server/                # 青栈 Nest 12 后端（本仓库交付主体）
 │   ├── web-antd/              # Vben Ant Design Vue 前端
@@ -25,6 +26,12 @@ vben-nest-kit/
 
 - `规则/vben-nestjs-backend-tech-plan.md` — 技术选型与里程碑
 - `规则/api-contract-vben.md` — 路径 / 方法 / 信封 / Cookie / Bearer
+
+### 青栈可读文档（摘要，不替代合同）
+
+- 架构：[docs/qingzhan/architecture.md](docs/qingzhan/architecture.md) · English: [docs/qingzhan/architecture.en.md](docs/qingzhan/architecture.en.md)
+- 贡献：[docs/qingzhan/contributing.md](docs/qingzhan/contributing.md) · English: [docs/qingzhan/contributing.en.md](docs/qingzhan/contributing.en.md)
+- 索引：`docs/qingzhan/README.md`
 
 ## 后端（apps/server）快速开始
 
