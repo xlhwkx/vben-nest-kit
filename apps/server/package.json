@@ -95,15 +95,5 @@
   },
   "engines": {
     "node": ">=22.12.0"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@parcel/watcher",
-      "@prisma/engines",
-      "@scarf/scarf",
-      "argon2",
-      "esbuild",
-      "prisma"
-    ]
   }
 }

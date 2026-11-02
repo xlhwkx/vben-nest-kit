@@ -20,7 +20,7 @@
 - 技术方案 Redis 键名与实现对齐：`auth:fail:user:…` / `auth:fail:ip:…`
 - 文档明确 `THROTTLE_STORAGE=memory` 下无登录 Redis fail-closed；`auth:fail` 在 Redis 宕时 fail-open
 - e2e：Redis `eval` 失败时 login → 503（fail-closed）
-- CI：`pnpm/action-setup` 去掉 `version`，改用根 `packageManager`；`apps/server` 声明 `onlyBuiltDependencies`（argon2/prisma 等，`--ignore-workspace` 下可编原生）
+- CI：`pnpm/action-setup` 去掉 `version`，改用根 `packageManager`；`apps/server/pnpm-workspace.yaml` `allowBuilds` + install `--config.dangerouslyAllowAllBuilds=true`（pnpm 11 / `--ignore-workspace`）
 
 ### Security
 - 凭证爆破：失败计数锁定与 IP QPS 限流互补

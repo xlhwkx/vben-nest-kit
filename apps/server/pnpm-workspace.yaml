@@ -1,0 +1,9 @@
+# Standalone settings when installing under apps/server (CI uses --ignore-workspace).
+# pnpm 11+: build approvals live here, not in package.json#pnpm.
+allowBuilds:
+  "@parcel/watcher": true
+  "@prisma/engines": true
+  "@scarf/scarf": true
+  argon2: true
+  esbuild: true
+  prisma: true

@@ -116,7 +116,9 @@ jobs:
         working-directory: apps/server
         # apps/server/pnpm-lock.yaml is gitignored (workspace uses root lock);
         # CI therefore cannot --frozen-lockfile for the server-only path.
-        run: pnpm install --ignore-workspace
+        # pnpm 11 strictDepBuilds: --ignore-workspace skips monorepo allowBuilds;
+        # dangerouslyAllowAllBuilds (+ local pnpm-workspace.yaml allowBuilds) lets argon2/prisma compile.
+        run: pnpm install --ignore-workspace --config.dangerouslyAllowAllBuilds=true
 
       - name: Prisma migrate + seed
         working-directory: apps/server
