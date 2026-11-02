@@ -1,10 +1,6 @@
-/* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-non-null-assertion -- e2e harness */
+/* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call -- e2e harness */
 /* oxlint-disable typescript/no-require-imports, eslint/no-nested-ternary, typescript/no-non-null-assertion -- e2e harness */
-import {
-  INestApplication,
-  VERSION_NEUTRAL,
-  VersioningType,
-} from '@nestjs/common';
+import { INestApplication, VERSION_NEUTRAL, VersioningType } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import cookieParser = require('cookie-parser');
 import request from 'supertest';
@@ -79,18 +75,14 @@ describe('Auth + Health (e2e)', () => {
   });
 
   it('GET /api/v1/health/live → 200', async () => {
-    const res = await request(app.getHttpServer())
-      .get('/api/v1/health/live')
-      .expect(200);
+    const res = await request(app.getHttpServer()).get('/api/v1/health/live').expect(200);
     expect(res.body.code).toBe(0);
     expect(res.body.error).toBeNull();
     expect(res.body.data).toBeTruthy();
   });
 
   it('GET /api/v1/health/ready → 200 (PG+Redis)', async () => {
-    const res = await request(app.getHttpServer())
-      .get('/api/v1/health/ready')
-      .expect(200);
+    const res = await request(app.getHttpServer()).get('/api/v1/health/ready').expect(200);
     expect(res.body.code).toBe(0);
     expect(res.body.data).toBeTruthy();
   });
@@ -154,9 +146,7 @@ describe('Auth + Health (e2e)', () => {
   });
 
   it('GET /api/user/info without token → 401', async () => {
-    const res = await request(app.getHttpServer())
-      .get('/api/user/info')
-      .expect(401);
+    const res = await request(app.getHttpServer()).get('/api/user/info').expect(401);
     expect(res.body.code).toBe(-1);
     expect(res.body.data).toBeNull();
   });
@@ -168,9 +158,7 @@ describe('Auth + Health (e2e)', () => {
       .set('Cookie', refreshCookie)
       .expect(200);
 
-    expect(
-      typeof res.body === 'object' && res.body !== null && 'code' in res.body,
-    ).toBe(false);
+    expect(typeof res.body === 'object' && res.body !== null && 'code' in res.body).toBe(false);
     const token =
       typeof res.body === 'string'
         ? res.body
@@ -364,10 +352,84 @@ describe('Auth + Health (e2e)', () => {
     expect(res.body.code).toBe(0);
     expect(typeof res.body.data).toBe('number');
   });
+  it('GET /api/timezone/getTimezoneOptions → public label/value[]', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/timezone/getTimezoneOptions')
+      .expect(200);
+    expect(res.body.code).toBe(0);
+    expect(Array.isArray(res.body.data)).toBe(true);
+    expect(res.body.data.length).toBeGreaterThanOrEqual(5);
+    expect(res.body.data[0]).toEqual(
+      expect.objectContaining({
+        label: expect.any(String),
+        value: expect.any(String),
+      }),
+    );
+    expect(res.body.data.some((o: { value: string }) => o.value === 'Asia/Shanghai')).toBe(true);
+  });
 
+  it('GET /api/timezone/getTimezone without token → 401', async () => {
+    await request(app.getHttpServer()).get('/api/timezone/getTimezone').expect(401);
+  });
+
+  it('timezone get/set round-trip + invalid rejected', async () => {
+    const before = await request(app.getHttpServer())
+      .get('/api/timezone/getTimezone')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    expect(before.body.code).toBe(0);
+    expect(before.body).not.toHaveProperty('password');
+
+    await request(app.getHttpServer())
+      .post('/api/timezone/setTimezone')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ timezone: 'Not/AZone' })
+      .expect(400);
+
+    const setOk = await request(app.getHttpServer())
+      .post('/api/timezone/setTimezone')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ timezone: 'Asia/Shanghai' })
+      .expect(200);
+    expect(setOk.body.code).toBe(0);
+    expect(setOk.body.data).toEqual({});
+
+    const after = await request(app.getHttpServer())
+      .get('/api/timezone/getTimezone')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    expect(after.body.code).toBe(0);
+    expect(after.body.data).toBe('Asia/Shanghai');
+
+    const v1 = await request(app.getHttpServer())
+      .get('/api/v1/timezone/getTimezone')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    expect(v1.body.data).toBe('Asia/Shanghai');
+  });
+
+  it('GET /api/demo/bigint with Bearer → raw JSON keeps oversized id literals', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/demo/bigint')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    expect(res.headers['content-type']).toMatch(/application\/json/);
+    expect(res.text).toContain(
+      '"id": 123456789012345678901234567890123456789012345678901234567890',
+    );
+    expect(res.text).not.toMatch(/password/i);
+    const parsed = JSON.parse(res.text) as {
+      code: number;
+      data: unknown;
+    };
+    expect(parsed.code).toBe(0);
+    expect(Array.isArray(parsed.data)).toBe(true);
+  });
+
+  it('GET /api/demo/bigint without token → 401', async () => {
+    await request(app.getHttpServer()).get('/api/demo/bigint').expect(401);
+  });
 });
-
-
 
 describe('Login throttle fail-closed (e2e)', () => {
   let app: INestApplication<App>;
@@ -410,9 +472,7 @@ describe('Login throttle fail-closed (e2e)', () => {
   it('Redis eval failure on login → 503 Rate limit unavailable', async () => {
     // ioredis attaches commands on a prototype/proxy; jest.spyOn(client, 'eval')
     // is unreliable under Jest+Node ESM on CI. Stub getClient instead.
-    const evalMock = jest
-      .fn()
-      .mockRejectedValue(new Error('simulated redis down'));
+    const evalMock = jest.fn().mockRejectedValue(new Error('simulated redis down'));
     const getClientSpy = jest.spyOn(redis, 'getClient').mockReturnValue({
       eval: evalMock,
     } as ReturnType<RedisService['getClient']>);

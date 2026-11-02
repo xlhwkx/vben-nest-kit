@@ -43,6 +43,13 @@ Auth · User · Menu · System（用户/角色/菜单/部门/字典）· Upload 
 - **上传**：`StorageProvider`（local 默认 / s3 可选）+ UUID；MIME 白名单 + **magic-bytes**（`file-type`）；默认无 SVG；`nosniff`；multer 上限对齐 `UPLOAD_MAX_BYTES`。
 - **队列**：`QueueModule` + BullMQ（mail / audit-archive 占位）；默认关闭，不连 Worker；`QUEUE_ENABLED` / `QUEUE_WORKER_ENABLED`。
 
+
+
+## API 覆盖备注（相对 mock）
+
+- **P2 已齐**：`/api/table/list`、`/api/status`、`/api/timezone/*`、可选 `/api/demo/bigint`（均双前缀 `/api` + `/api/v1`）。
+- **`/api/test`**：mock 探活（GET/POST 返回纯文本）。Nest **不提供**该路径；联调/探活请用 `GET /api/v1/health`、`/health/live`、`/health/ready`（合同 §8 允许用 health 替代）。
+
 ## 明确未做（勿当成已交付）
 
 - 对象存储生产运维（MinIO Compose 一键 / 生命周期策略等仍可选）

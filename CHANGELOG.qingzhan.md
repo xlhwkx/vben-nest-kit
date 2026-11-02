@@ -6,6 +6,8 @@
 ## Unreleased
 
 ### Added
+- P2 timezone: `GET/POST /api/timezone/*` (getTimezone Bearer, getTimezoneOptions public, setTimezone whitelist)
+- P2 optional `GET /api/demo/bigint` (Bearer; raw JSON keeps oversized id literals for json-bigint)
 - P2 demo: `GET /api/table/list` (Bearer, items+total) and `GET /api/status` (public error envelope)
 - e2e: `/api/dict/all|data|version` and table/status
 - M4 可选骨架：`StorageProvider`（local 默认 / s3 兼容 MinIO）；`QueueModule` + BullMQ（mail / audit-archive 占位，`QUEUE_ENABLED` 默认关）
@@ -15,6 +17,7 @@
 - Upload **magic-bytes**（`file-type`）：真实类型须 ∈ 白名单，伪造 Content-Type → 400；multer `fileSize` 与 `UPLOAD_MAX_BYTES` 对齐
 
 ### Changed
+- Mock `/api/test` 探活：Nest **不实现**；用 `GET /api/v1/health`（及 live/ready）替代，见 `docs/qingzhan/architecture.md`
 - 登录 throttler Redis storage：**fail-closed**（Redis 不可用 → HTTP **503** `Rate limit unavailable`）；其它路由仍 fail-open + warn
 - Known gaps：补 **SliderCaptcha** 阻碍 headless UI 登录 / 静默 refresh 自动化勾选；划掉本刀已清项
 

@@ -605,7 +605,7 @@ Nest CRUD Should 扩展；密码只接受写入接口、永不回读。
 |------|------|------|------|
 | GET | `/api/table/list` | Bearer | 演示表格；Query：`page`,`pageSize`,`sortBy`,`sortOrder`；分页 `items+total` |
 | GET | `/api/status?status=500` | 无 | 把 HTTP 状态设为 query，返回错误信封（联调/演示） |
-| GET/POST | `/api/test` | 视实现 | mock 探活，Nest 可用 `/api/v1/health` 替代 |
+| GET/POST | `/api/test` | 视实现 | mock 探活；**Nest 不实现**，用 `GET /api/v1/health`（live/ready）替代 |
 | GET | `/api/demo/bigint` | 视 mock | 大整数序列化演示；Nest 可选 |
 | GET | `/api/timezone/getTimezone` | Bearer | 当前时区 string |
 | GET | `/api/timezone/getTimezoneOptions` | 无 | `{ label, value }[]` |
