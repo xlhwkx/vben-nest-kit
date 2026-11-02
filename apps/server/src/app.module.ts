@@ -4,6 +4,7 @@ import { APP_GUARD, APP_INTERCEPTOR, Reflector } from "@nestjs/core";
 import { JwtModule } from "@nestjs/jwt";
 import { loadEnv } from "./common/config/env";
 import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
+import { PermissionsGuard } from "./common/guards/permissions.guard";
 import { ResponseInterceptor } from "./common/interceptors/response.interceptor";
 import { AuthModule } from "./modules/auth/auth.module";
 import { HealthModule } from "./modules/health/health.module";
@@ -30,6 +31,7 @@ import { RedisModule } from "./redis/redis.module";
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: PermissionsGuard },
     {
       provide: APP_INTERCEPTOR,
       useFactory: (reflector: Reflector) => new ResponseInterceptor(reflector),
@@ -38,4 +40,3 @@ import { RedisModule } from "./redis/redis.module";
   ],
 })
 export class AppModule {}
-

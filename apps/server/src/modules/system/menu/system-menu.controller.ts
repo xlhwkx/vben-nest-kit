@@ -12,6 +12,7 @@ import {
   VERSION_NEUTRAL,
 } from "@nestjs/common";
 import { z } from "zod";
+import { RequirePermissions } from "../../../common/decorators/require-permissions.decorator";
 import {
   SystemMenuService,
   type SystemMenuInput,
@@ -57,6 +58,7 @@ function parseMenuBody(body: unknown): SystemMenuInput {
 export class SystemMenuController {
   constructor(private readonly menus: SystemMenuService) {}
 
+  /** list/exists: Bearer only (JwtAuthGuard); no write permission required */
   @Get("list")
   async list() {
     return this.menus.list();
@@ -90,15 +92,16 @@ export class SystemMenuController {
     return this.menus.pathExists(path, id);
   }
 
-  /** Nest Should: create menu (mock 演示环境禁止写，Nest 必须真写) */
   @Post()
   @HttpCode(200)
+  @RequirePermissions("System:Menu:Create")
   async create(@Body() body: unknown) {
     return this.menus.create(parseMenuBody(body));
   }
 
   @Put(":id")
   @HttpCode(200)
+  @RequirePermissions("System:Menu:Update")
   async update(@Param("id") id: string, @Body() body: unknown) {
     if (!id?.trim()) {
       throw new BadRequestException("id is required");
@@ -108,6 +111,7 @@ export class SystemMenuController {
 
   @Delete(":id")
   @HttpCode(200)
+  @RequirePermissions("System:Menu:Delete")
   async remove(@Param("id") id: string) {
     if (!id?.trim()) {
       throw new BadRequestException("id is required");
@@ -115,4 +119,3 @@ export class SystemMenuController {
     return this.menus.remove(id);
   }
 }
-
