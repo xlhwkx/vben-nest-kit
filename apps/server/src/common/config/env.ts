@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+const boolish = z
+  .string()
+  .optional()
+  .transform((v) => {
+    if (v === undefined || v === "") return undefined;
+    return v === "true" || v === "1";
+  });
+
 const envSchema = z.object({
   NODE_ENV: z.string().default("development"),
   APP_PORT: z.coerce.number().default(5320),
@@ -20,6 +28,8 @@ const envSchema = z.object({
   UPLOAD_PUBLIC_PATH: z.string().default("/uploads"),
   UPLOAD_MAX_BYTES: z.coerce.number().default(5_242_880),
   UPLOAD_ALLOWED_MIME: z.string().optional(),
+  /** production 默认关；非 production 默认开；设 true/false 可强制 */
+  SWAGGER_ENABLED: boolish,
 });
 
 export type AppEnv = z.infer<typeof envSchema> & {

@@ -49,7 +49,7 @@ cd ../..
 pnpm --filter @qingzhan/server start:dev
 # 若未走 workspace filter，可：
 # cd apps/server && pnpm start:dev
-# 默认 http://localhost:5320/api/health 与 /api/v1/health
+# 默认 http://localhost:5320/api/health、/api/v1/health/live|/ready；Swagger /api/docs
 ```
 
 **安装说明：** 根 `pnpm install` 会跑 Vben monorepo 的 postinstall；若因网络/leftover 失败，**不要阻塞后端**——改用 `cd apps/server && pnpm install --ignore-workspace`。`apps/server/pnpm-lock.yaml` 已加入 `.gitignore`（workspace 场景下以根 lock 为准）。目标是把 `@qingzhan/server` 稳定进根 workspace（`pnpm --filter @qingzhan/server`），当前允许上述 fallback。
@@ -92,7 +92,8 @@ pnpm run build && pnpm run start:prod
 > 本机若 5432/6379 已被占用，`.env.example` 默认宿主端口为 **55433**（PG）/ **56379**（Redis）。
 
 
-下一刀：系统菜单/角色/用户 CRUD、Swagger、审计。
+下一刀：审计日志模块；前端联调改 Vben baseURL（可选）。Swagger 已开：`/api/docs`。
 
 上游 Vben 文档见 `README.vben.md` / `README.zh-CN.md`。
+
 

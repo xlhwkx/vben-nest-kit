@@ -9,6 +9,7 @@ import {
   Res,
   VERSION_NEUTRAL,
 } from "@nestjs/common";
+import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { Public } from "../../common/decorators/public.decorator";
@@ -24,6 +25,7 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+@ApiTags("Auth")
 @Controller({ path: "auth", version: [VERSION_NEUTRAL, "1"] })
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
@@ -69,6 +71,7 @@ export class AuthController {
     return this.auth.logout(cookie, res);
   }
 
+  @ApiBearerAuth("Bearer")
   @Get("codes")
   async codes(@CurrentUser() user: AuthUser): Promise<string[]> {
     return this.auth.getCodes(user.userId);
