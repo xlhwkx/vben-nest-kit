@@ -352,6 +352,65 @@ describe('Auth + Health (e2e)', () => {
     expect(res.body.code).toBe(0);
     expect(typeof res.body.data).toBe('number');
   });
+
+  it('GET /api/system/role/list → items+total with permissions[]', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/system/role/list')
+      .query({ page: 1, pageSize: 20 })
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    expect(res.body.code).toBe(0);
+    expect(Array.isArray(res.body.data?.items)).toBe(true);
+    expect(typeof res.body.data.total).toBe('number');
+    expect(res.body.data.items.length).toBeGreaterThan(0);
+    const row = res.body.data.items[0];
+    expect(row).toEqual(
+      expect.objectContaining({
+        id: expect.any(String),
+        name: expect.any(String),
+        code: expect.any(String),
+        status: expect.any(Number),
+        createTime: expect.any(String),
+        permissions: expect.any(Array),
+      }),
+    );
+    expect(JSON.stringify(res.body)).not.toMatch(/password/i);
+  });
+
+  it('POST /api/system/role without code → auto slug; PUT {status} partial OK', async () => {
+    const stamp = Date.now().toString(36);
+    const created = await request(app.getHttpServer())
+      .post('/api/system/role')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        name: `Parity Role ${stamp}`,
+        status: 1,
+        remark: 'mock-field-parity',
+      })
+      .expect(200);
+    expect(created.body.code).toBe(0);
+    expect(created.body.data?.id).toEqual(expect.any(String));
+    expect(created.body.data?.code).toEqual(expect.any(String));
+    expect(created.body.data.code.length).toBeGreaterThan(0);
+    expect(created.body.data.status).toBe(1);
+
+    const id = created.body.data.id as string;
+    const patched = await request(app.getHttpServer())
+      .put(`/api/system/role/${id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ status: 0 })
+      .expect(200);
+    expect(patched.body.code).toBe(0);
+    expect(patched.body.data?.status).toBe(0);
+    expect(patched.body.data?.name).toBe(`Parity Role ${stamp}`);
+    expect(patched.body.data?.code).toBe(created.body.data.code);
+
+    await request(app.getHttpServer())
+      .delete(`/api/system/role/${id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+  });
+
   it('GET /api/timezone/getTimezoneOptions → public label/value[]', async () => {
     const res = await request(app.getHttpServer())
       .get('/api/timezone/getTimezoneOptions')

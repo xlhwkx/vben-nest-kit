@@ -3,12 +3,13 @@ import {
   BadRequestException,
   ConflictException,
   NotFoundException,
-} from "@nestjs/common";
-import * as argon2 from "argon2";
-import { Prisma } from "../../../generated/prisma/client";
-import { PrismaService } from "../../../prisma/prisma.service";
-import { RedisService } from "../../../redis/redis.service";
-import { AuditService } from "../../audit/audit.service";
+} from '@nestjs/common';
+import * as argon2 from 'argon2';
+import { Prisma } from '../../../generated/prisma/client';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { RedisService } from '../../../redis/redis.service';
+import { AuditService } from '../../audit/audit.service';
+import { parseListCreatedAtRange } from '../../../common/parse-list-time-range';
 
 export type SystemUserItem = {
   id: string;
@@ -70,14 +71,14 @@ export type SystemUserListQuery = {
 
 const USERNAME_MAX = 64;
 
-const createTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
-  timeZone: "Asia/Shanghai",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
+const createTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
+  timeZone: 'Asia/Shanghai',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
   hour12: false,
 });
 
@@ -99,9 +100,7 @@ function softDeletedUsername(username: string, id: string): string {
 }
 
 function isUniqueViolation(err: unknown): boolean {
-  return (
-    err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002"
-  );
+  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
 }
 
 @Injectable()
@@ -112,9 +111,7 @@ export class SystemUserService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(
-    query: SystemUserListQuery,
-  ): Promise<{ items: SystemUserItem[]; total: number }> {
+  async list(query: SystemUserListQuery): Promise<{ items: SystemUserItem[]; total: number }> {
     const page = parsePage(query.page, 1);
     let pageSize = parsePage(query.pageSize, 20);
     if (pageSize > 100) pageSize = 100;
@@ -124,22 +121,17 @@ export class SystemUserService {
     if (query.name?.trim()) {
       const q = query.name.trim();
       where.OR = [
-        { realName: { contains: q, mode: "insensitive" } },
-        { username: { contains: q, mode: "insensitive" } },
+        { realName: { contains: q, mode: 'insensitive' } },
+        { username: { contains: q, mode: 'insensitive' } },
       ];
     }
     if (query.id?.trim()) {
       where.id = query.id.trim();
     }
     if (query.remark?.trim()) {
-      where.remark = { contains: query.remark.trim(), mode: "insensitive" };
+      where.remark = { contains: query.remark.trim(), mode: 'insensitive' };
     }
-    if (
-      query.status === 0 ||
-      query.status === "0" ||
-      query.status === 1 ||
-      query.status === "1"
-    ) {
+    if (query.status === 0 || query.status === '0' || query.status === 1 || query.status === '1') {
       where.status = Number(query.status);
     }
     if (query.deptId?.trim()) {
@@ -147,30 +139,21 @@ export class SystemUserService {
     }
     if (
       query.gender === 0 ||
-      query.gender === "0" ||
+      query.gender === '0' ||
       query.gender === 1 ||
-      query.gender === "1" ||
+      query.gender === '1' ||
       query.gender === 2 ||
-      query.gender === "2"
+      query.gender === '2'
     ) {
       where.gender = Number(query.gender);
     }
-    if (query.startTime || query.endTime) {
-      where.createdAt = {};
-      if (query.startTime) {
-        const t = new Date(query.startTime);
-        if (!Number.isNaN(t.getTime())) where.createdAt.gte = t;
-      }
-      if (query.endTime) {
-        const t = new Date(query.endTime);
-        if (!Number.isNaN(t.getTime())) where.createdAt.lte = t;
-      }
-    }
+    const createdAt = parseListCreatedAtRange(query.startTime, query.endTime);
+    if (createdAt) where.createdAt = createdAt;
 
     const total = await this.prisma.user.count({ where });
     const rows = await this.prisma.user.findMany({
       where,
-      orderBy: [{ createdAt: "desc" }, { username: "asc" }],
+      orderBy: [{ createdAt: 'desc' }, { username: 'asc' }],
       skip: (page - 1) * pageSize,
       take: pageSize,
       include: {
@@ -184,11 +167,11 @@ export class SystemUserService {
   async create(input: SystemUserCreateInput): Promise<SystemUserItem> {
     const username = input.username?.trim();
     const name = input.name?.trim();
-    const password = input.password ?? "";
-    if (!username) throw new BadRequestException("username is required");
-    if (!name) throw new BadRequestException("name is required");
+    const password = input.password ?? '';
+    if (!username) throw new BadRequestException('username is required');
+    if (!name) throw new BadRequestException('name is required');
     if (!password || password.length < 6) {
-      throw new BadRequestException("password must be at least 6 characters");
+      throw new BadRequestException('password must be at least 6 characters');
     }
     if (username.length > USERNAME_MAX) {
       throw new BadRequestException(`username must be <= ${USERNAME_MAX} chars`);
@@ -197,7 +180,7 @@ export class SystemUserService {
     const dup = await this.prisma.user.findFirst({
       where: { username, deletedAt: null },
     });
-    if (dup) throw new ConflictException("Username already exists");
+    if (dup) throw new ConflictException('Username already exists');
 
     const roleIds = await this.validateRoleIds(input.roles ?? []);
     const deptId = await this.validateDeptId(input.deptId);
@@ -219,7 +202,7 @@ export class SystemUserService {
             ...(deptId ? { dept: { connect: { id: deptId } } } : {}),
           },
         });
-        if (roleIds.length) {
+        if (roleIds.length > 0) {
           await tx.userRole.createMany({
             data: roleIds.map((roleId) => ({ userId: user.id, roleId })),
             skipDuplicates: true,
@@ -231,17 +214,17 @@ export class SystemUserService {
         });
       });
       this.audit.record({
-        action: "system.user.create",
-        module: "system.user",
+        action: 'system.user.create',
+        module: 'system.user',
         status: 200,
         detail: { id: row.id, username: row.username },
       });
       return this.toItem(row);
-    } catch (err) {
-      if (isUniqueViolation(err)) {
-        throw new ConflictException("Username already exists");
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ConflictException('Username already exists');
       }
-      throw err;
+      throw error;
     }
   }
 
@@ -253,32 +236,28 @@ export class SystemUserService {
 
     if (input.username !== undefined) {
       const username = input.username.trim();
-      if (!username) throw new BadRequestException("username is required");
+      if (!username) throw new BadRequestException('username is required');
       if (username.length > USERNAME_MAX) {
-        throw new BadRequestException(
-          `username must be <= ${USERNAME_MAX} chars`,
-        );
+        throw new BadRequestException(`username must be <= ${USERNAME_MAX} chars`);
       }
       if (username !== existing.username) {
         const dup = await this.prisma.user.findFirst({
           where: { username, deletedAt: null, NOT: { id } },
         });
-        if (dup) throw new ConflictException("Username already exists");
+        if (dup) throw new ConflictException('Username already exists');
         data.username = username;
       }
     }
 
     if (input.name !== undefined) {
       const name = input.name.trim();
-      if (!name) throw new BadRequestException("name is required");
+      if (!name) throw new BadRequestException('name is required');
       data.realName = name;
     }
 
-    if (input.status === 0 || input.status === 1) {
-      if (input.status !== existing.status) {
-        data.status = input.status;
-        bumpToken = true;
-      }
+    if ((input.status === 0 || input.status === 1) && input.status !== existing.status) {
+      data.status = input.status;
+      bumpToken = true;
     }
 
     if (input.gender !== undefined) {
@@ -287,9 +266,7 @@ export class SystemUserService {
 
     if (input.deptId !== undefined) {
       const nextDeptId = await this.validateDeptId(input.deptId);
-      data.dept = nextDeptId
-        ? { connect: { id: nextDeptId } }
-        : { disconnect: true };
+      data.dept = nextDeptId ? { connect: { id: nextDeptId } } : { disconnect: true };
     }
 
     if (input.remark !== undefined) {
@@ -306,7 +283,7 @@ export class SystemUserService {
 
     if (input.password !== undefined) {
       if (!input.password || input.password.length < 6) {
-        throw new BadRequestException("password must be at least 6 characters");
+        throw new BadRequestException('password must be at least 6 characters');
       }
       data.passwordHash = await argon2.hash(input.password, {
         type: argon2.argon2id,
@@ -315,9 +292,7 @@ export class SystemUserService {
     }
 
     const hasRolesField = input.roles !== undefined;
-    const roleIds = hasRolesField
-      ? await this.validateRoleIds(input.roles ?? [])
-      : null;
+    const roleIds = hasRolesField ? await this.validateRoleIds(input.roles ?? []) : null;
 
     if (bumpToken) {
       data.tokenVersion = { increment: 1 };
@@ -330,7 +305,7 @@ export class SystemUserService {
         }
         if (roleIds !== null) {
           await tx.userRole.deleteMany({ where: { userId: id } });
-          if (roleIds.length) {
+          if (roleIds.length > 0) {
             await tx.userRole.createMany({
               data: roleIds.map((roleId) => ({ userId: id, roleId })),
               skipDuplicates: true,
@@ -354,21 +329,21 @@ export class SystemUserService {
       }
 
       this.audit.record({
-        action: "system.user.update",
-        module: "system.user",
+        action: 'system.user.update',
+        module: 'system.user',
         status: 200,
         detail: {
           id: row.id,
           username: row.username,
-          fields: Object.keys(input).filter((k) => k !== "password"),
+          fields: Object.keys(input).filter((k) => k !== 'password'),
         },
       });
       return this.toItem(row);
-    } catch (err) {
-      if (isUniqueViolation(err)) {
-        throw new ConflictException("Username already exists");
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ConflictException('Username already exists');
       }
-      throw err;
+      throw error;
     }
   }
 
@@ -394,8 +369,8 @@ export class SystemUserService {
     });
     await this.redis.del(`perm:codes:${id}`);
     this.audit.record({
-      action: "system.user.delete",
-      module: "system.user",
+      action: 'system.user.delete',
+      module: 'system.user',
       status: 200,
       detail: { id, username: existing.username },
     });
@@ -431,17 +406,16 @@ export class SystemUserService {
     return item;
   }
 
-
   private async validateDeptId(deptId: string | null | undefined): Promise<string | null> {
     if (deptId === undefined || deptId === null) return null;
     const id = String(deptId).trim();
-    if (!id || id === "0") return null;
+    if (!id || id === '0') return null;
     const row = await this.prisma.dept.findFirst({
       where: { id, deletedAt: null },
       select: { id: true },
     });
     if (!row) {
-      throw new BadRequestException("deptId not found or deleted");
+      throw new BadRequestException('deptId not found or deleted');
     }
     return row.id;
   }
@@ -450,7 +424,7 @@ export class SystemUserService {
     const row = await this.prisma.user.findFirst({
       where: { id, deletedAt: null },
     });
-    if (!row) throw new NotFoundException("User not found");
+    if (!row) throw new NotFoundException('User not found');
     return row;
   }
 
@@ -460,16 +434,14 @@ export class SystemUserService {
   }
 
   private async validateRoleIds(ids: string[]): Promise<string[]> {
-    const unique = Array.from(
-      new Set((ids ?? []).map((x) => String(x).trim()).filter(Boolean)),
-    );
-    if (!unique.length) return [];
+    const unique = [...new Set((ids ?? []).map((x) => String(x).trim()).filter(Boolean))];
+    if (unique.length === 0) return [];
     const found = await this.prisma.role.findMany({
       where: { id: { in: unique } },
       select: { id: true },
     });
     if (found.length !== unique.length) {
-      throw new BadRequestException("One or more role ids are invalid");
+      throw new BadRequestException('One or more role ids are invalid');
     }
     return unique;
   }

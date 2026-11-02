@@ -6,6 +6,8 @@
 ## Unreleased
 
 ### Added
+- `docs/qingzhan/mock-field-parity.md`：backend-mock vs Nest 字段级对账与剩余缺口
+- e2e：`GET /system/role/list` 字段锁；`POST` 无 code 自动 slug + `PUT {status}` 部分更新
 - P2 timezone: `GET/POST /api/timezone/*` (getTimezone Bearer, getTimezoneOptions public, setTimezone whitelist)
 - P2 optional `GET /api/demo/bigint` (Bearer; raw JSON keeps oversized id literals for json-bigint)
 - P2 demo: `GET /api/table/list` (Bearer, items+total) and `GET /api/status` (public error envelope)
@@ -22,6 +24,9 @@
 - Known gaps：补 **SliderCaptcha** 阻碍 headless UI 登录 / 静默 refresh 自动化勾选；划掉本刀已清项
 
 ### Fixed
+- server tsconfig: drop unused `baseUrl`; test `moduleResolution` -> `nodenext` (oxlint type-aware)
+- system/role：PUT 支持部分更新（playground 状态开关只传 `{status}`）；POST `code` 可选自动 slug
+- system user/role list：`YYYY-MM-DD` `endTime` 含当日 UTC 末（RangePicker 日界）
 - Local storage：`put` 拒绝 `..` / 绝对路径穿越；单测覆盖
 - `STORAGE_DRIVER=s3` 时跳过本地 `useStaticAssets(/uploads)`
 - 文档：`S3_PUBLIC_URL` / 桶策略决定返回 URL 是否可读

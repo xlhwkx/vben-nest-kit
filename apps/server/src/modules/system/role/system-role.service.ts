@@ -3,11 +3,12 @@ import {
   BadRequestException,
   ConflictException,
   NotFoundException,
-} from "@nestjs/common";
-import { Prisma } from "../../../generated/prisma/client";
-import { PrismaService } from "../../../prisma/prisma.service";
-import { RedisService } from "../../../redis/redis.service";
-import { AuditService } from "../../audit/audit.service";
+} from '@nestjs/common';
+import { Prisma } from '../../../generated/prisma/client';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { RedisService } from '../../../redis/redis.service';
+import { AuditService } from '../../audit/audit.service';
+import { parseListCreatedAtRange } from '../../../common/parse-list-time-range';
 
 export type SystemRoleItem = {
   id: string;
@@ -19,13 +20,24 @@ export type SystemRoleItem = {
   remark?: string;
 };
 
-export type SystemRoleInput = {
+export type SystemRoleCreateInput = {
   name: string;
-  code: string;
+  code?: string;
   status?: number;
   remark?: string | null;
   permissions?: string[];
 };
+
+export type SystemRoleUpdateInput = {
+  name?: string;
+  code?: string;
+  status?: number;
+  remark?: string | null;
+  permissions?: string[];
+};
+
+/** @deprecated use SystemRoleCreateInput */
+export type SystemRoleInput = SystemRoleCreateInput;
 
 export type SystemRoleListQuery = {
   page?: number | string;
@@ -38,19 +50,31 @@ export type SystemRoleListQuery = {
   status?: string | number;
 };
 
-const createTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
-  timeZone: "Asia/Shanghai",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
+const createTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
+  timeZone: 'Asia/Shanghai',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
   hour12: false,
 });
 
 function formatCreateTime(d: Date): string {
   return createTimeFormatter.format(d);
+}
+
+/** Mock/UI have no role.code; Nest needs unique code for RBAC — slug from name. */
+function slugRoleCode(name: string): string {
+  const base = name
+    .trim()
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, '_')
+    .replaceAll(/^_+|_+$/g, '')
+    .slice(0, 48);
+  if (base) return base;
+  return `role_${Date.now().toString(36)}`;
 }
 
 function parsePage(v: number | string | undefined, fallback: number): number {
@@ -67,9 +91,7 @@ export class SystemRoleService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(
-    query: SystemRoleListQuery,
-  ): Promise<{ items: SystemRoleItem[]; total: number }> {
+  async list(query: SystemRoleListQuery): Promise<{ items: SystemRoleItem[]; total: number }> {
     const page = parsePage(query.page, 1);
     let pageSize = parsePage(query.pageSize, 20);
     if (pageSize > 100) pageSize = 100;
@@ -77,38 +99,24 @@ export class SystemRoleService {
     const where: Prisma.RoleWhereInput = {};
 
     if (query.name?.trim()) {
-      where.name = { contains: query.name.trim(), mode: "insensitive" };
+      where.name = { contains: query.name.trim(), mode: 'insensitive' };
     }
     if (query.id?.trim()) {
       where.id = query.id.trim();
     }
     if (query.remark?.trim()) {
-      where.remark = { contains: query.remark.trim(), mode: "insensitive" };
+      where.remark = { contains: query.remark.trim(), mode: 'insensitive' };
     }
-    if (
-      query.status === 0 ||
-      query.status === "0" ||
-      query.status === 1 ||
-      query.status === "1"
-    ) {
+    if (query.status === 0 || query.status === '0' || query.status === 1 || query.status === '1') {
       where.status = Number(query.status);
     }
-    if (query.startTime || query.endTime) {
-      where.createdAt = {};
-      if (query.startTime) {
-        const t = new Date(query.startTime);
-        if (!Number.isNaN(t.getTime())) where.createdAt.gte = t;
-      }
-      if (query.endTime) {
-        const t = new Date(query.endTime);
-        if (!Number.isNaN(t.getTime())) where.createdAt.lte = t;
-      }
-    }
+    const createdAt = parseListCreatedAtRange(query.startTime, query.endTime);
+    if (createdAt) where.createdAt = createdAt;
 
     const total = await this.prisma.role.count({ where });
     const rows = await this.prisma.role.findMany({
       where,
-      orderBy: [{ createdAt: "desc" }, { name: "asc" }],
+      orderBy: [{ createdAt: 'desc' }, { name: 'asc' }],
       skip: (page - 1) * pageSize,
       take: pageSize,
       include: {
@@ -122,14 +130,17 @@ export class SystemRoleService {
     return { items: rows.map((row) => this.toItem(row)), total };
   }
 
-  async create(input: SystemRoleInput): Promise<SystemRoleItem> {
+  async create(input: SystemRoleCreateInput): Promise<SystemRoleItem> {
     const name = input.name?.trim();
-    const code = input.code?.trim();
-    if (!name) throw new BadRequestException("name is required");
-    if (!code) throw new BadRequestException("code is required");
-
+    if (!name) throw new BadRequestException('name is required');
+    let code = input.code?.trim() || slugRoleCode(name);
     const dupCode = await this.prisma.role.findUnique({ where: { code } });
-    if (dupCode) throw new ConflictException("Role code already exists");
+    if (dupCode) {
+      if (input.code?.trim()) {
+        throw new ConflictException('Role code already exists');
+      }
+      code = `${code}_${Date.now().toString(36)}`.slice(0, 64);
+    }
 
     const menuIds = await this.validateMenuIds(input.permissions ?? []);
 
@@ -142,7 +153,7 @@ export class SystemRoleService {
           remark: input.remark?.trim() || null,
         },
       });
-      if (menuIds.length) {
+      if (menuIds.length > 0) {
         await tx.roleMenu.createMany({
           data: menuIds.map((menuId) => ({ roleId: role.id, menuId })),
           skipDuplicates: true,
@@ -160,46 +171,52 @@ export class SystemRoleService {
     });
 
     this.audit.record({
-      action: "system.role.create",
-      module: "system.role",
+      action: 'system.role.create',
+      module: 'system.role',
       status: 200,
       detail: { id: row.id, code: row.code },
     });
     return this.toItem(row);
   }
 
-  async update(id: string, input: SystemRoleInput): Promise<SystemRoleItem> {
+  async update(id: string, input: SystemRoleUpdateInput): Promise<SystemRoleItem> {
     const existing = await this.requireRole(id);
-    const name = input.name?.trim();
-    const code = input.code?.trim();
-    if (!name) throw new BadRequestException("name is required");
-    if (!code) throw new BadRequestException("code is required");
 
-    if (code !== existing.code) {
-      const dupCode = await this.prisma.role.findUnique({ where: { code } });
-      if (dupCode) throw new ConflictException("Role code already exists");
+    const data: Prisma.RoleUpdateInput = {};
+    if (input.name !== undefined) {
+      const name = input.name.trim();
+      if (!name) throw new BadRequestException('name is required');
+      data.name = name;
+    }
+    if (input.code !== undefined) {
+      const code = input.code.trim();
+      if (!code) throw new BadRequestException('code is required');
+      if (code !== existing.code) {
+        const dupCode = await this.prisma.role.findUnique({ where: { code } });
+        if (dupCode) throw new ConflictException('Role code already exists');
+        data.code = code;
+      }
+    }
+    if (input.status === 0 || input.status === 1) {
+      data.status = input.status;
+    }
+    if (input.remark !== undefined) {
+      data.remark = input.remark?.trim() || null;
     }
 
-    // Only replace RoleMenu when `permissions` is explicitly present (incl. []).
+    // Only replace RoleMenu when permissions is explicitly present (incl. []).
     const hasPermissionsField = input.permissions !== undefined;
     const menuIds = hasPermissionsField
       ? await this.validateMenuIds(input.permissions ?? [])
       : null;
-    const nextStatus = input.status === 0 ? 0 : 1;
 
     const row = await this.prisma.$transaction(async (tx) => {
-      await tx.role.update({
-        where: { id },
-        data: {
-          name,
-          code,
-          status: nextStatus,
-          remark: input.remark?.trim() || null,
-        },
-      });
+      if (Object.keys(data).length > 0) {
+        await tx.role.update({ where: { id }, data });
+      }
       if (menuIds !== null) {
         await tx.roleMenu.deleteMany({ where: { roleId: id } });
-        if (menuIds.length) {
+        if (menuIds.length > 0) {
           await tx.roleMenu.createMany({
             data: menuIds.map((menuId) => ({ roleId: id, menuId })),
             skipDuplicates: true,
@@ -217,31 +234,33 @@ export class SystemRoleService {
       });
     });
 
-    if (nextStatus !== existing.status) {
+    if ((input.status === 0 || input.status === 1) && input.status !== existing.status) {
       await this.clearPermCacheForRole(id);
     }
 
     this.audit.record({
-      action: "system.role.update",
-      module: "system.role",
+      action: 'system.role.update',
+      module: 'system.role',
       status: 200,
-      detail: { id: row.id, code: row.code },
+      detail: { id: row.id, code: row.code, fields: Object.keys(input) },
     });
     return this.toItem(row);
   }
 
   async remove(id: string): Promise<{ id: string }> {
     await this.requireRole(id);
-    const assigned = await this.prisma.userRole.count({ where: { roleId: id } });
+    const assigned = await this.prisma.userRole.count({
+      where: { roleId: id },
+    });
     if (assigned > 0) {
-      throw new ConflictException("Role has users assigned; unassign first");
+      throw new ConflictException('Role has users assigned; unassign first');
     }
 
     await this.clearPermCacheForRole(id);
     await this.prisma.role.delete({ where: { id } });
     this.audit.record({
-      action: "system.role.delete",
-      module: "system.role",
+      action: 'system.role.delete',
+      module: 'system.role',
       status: 200,
       detail: { id },
     });
@@ -271,21 +290,19 @@ export class SystemRoleService {
 
   private async requireRole(id: string) {
     const row = await this.prisma.role.findUnique({ where: { id } });
-    if (!row) throw new NotFoundException("Role not found");
+    if (!row) throw new NotFoundException('Role not found');
     return row;
   }
 
   private async validateMenuIds(ids: string[]): Promise<string[]> {
-    const unique = Array.from(
-      new Set((ids ?? []).map((x) => String(x).trim()).filter(Boolean)),
-    );
-    if (!unique.length) return [];
+    const unique = [...new Set((ids ?? []).map((x) => String(x).trim()).filter(Boolean))];
+    if (unique.length === 0) return [];
     const found = await this.prisma.menu.findMany({
       where: { id: { in: unique }, deletedAt: null },
       select: { id: true },
     });
     if (found.length !== unique.length) {
-      throw new BadRequestException("One or more menu ids are invalid");
+      throw new BadRequestException('One or more menu ids are invalid');
     }
     return unique;
   }
@@ -295,8 +312,6 @@ export class SystemRoleService {
       where: { roleId },
       select: { userId: true },
     });
-    await Promise.all(
-      links.map((l) => this.redis.del(`perm:codes:${l.userId}`)),
-    );
+    await Promise.all(links.map((l) => this.redis.del(`perm:codes:${l.userId}`)));
   }
 }
