@@ -93,7 +93,7 @@ export class AuthService {
     );
   }
 
-  /** Plan §: auth:fail:{username|ip} */
+  /** Redis keys: auth:fail:user:{username} / auth:fail:ip:{ip} */
   private userFailKey(username: string): string {
     return `auth:fail:user:${username.trim().toLowerCase()}`;
   }

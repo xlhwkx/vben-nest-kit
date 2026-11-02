@@ -537,7 +537,7 @@ your-open-admin/
 | 用途 | Key 设计示意 | TTL | 原因 |
 |---|---|---|---|
 | Access 旁路：用户权限码缓存 | `perm:codes:{userId}` | 30–120s | 降 DB 压力；改角色时主动 `DEL` |
-| 登录失败计数 | `auth:fail:{username|ip}` | 15m | 防爆破；比纯内存限流可跨实例 |
+| 登录失败计数 | `auth:fail:user:{username}` / `auth:fail:ip:{ip}` | 15m | 防爆破；比纯内存限流可跨实例 |
 | Refresh 会话索引（可选加速） | `sess:refresh:{jti}` | 同 refresh | DB 仍是真相源；Redis 做快速存在性检查 |
 | 分布式锁（导入/种子） | `lock:job:{name}` | 短 TTL + 持有校验 | 防重复跑迁移脚本/定时任务 |
 | 验证码/临时票据（若有） | `otp:{id}` | 分钟级 | 无需落库 |

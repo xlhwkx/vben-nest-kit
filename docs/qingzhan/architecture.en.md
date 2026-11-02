@@ -33,7 +33,7 @@ Auth · User · Menu · System (user/role/menu/dept/dict) · Upload · Health ·
 ## Cross-cutting (shipped highlights)
 
 - **Swagger**: `http://localhost:5320/api/docs`; off in production unless `SWAGGER_ENABLED` forces it.
-- **Throttling**: ~120 / 60s globally; stricter `POST /auth/login` (default 10 / 60s) → HTTP 429 envelope; Health skipped. Login throttler is **fail-closed (503)** when Redis is down; other routes stay fail-open + warn.
+- **Throttling**: ~120 / 60s globally; stricter `POST /auth/login` (default 10 / 60s) → HTTP 429 envelope; Health skipped. Default `THROTTLE_STORAGE=redis`: login throttler is **fail-closed (503)** when Redis is down; other routes fail-open + warn. With `THROTTLE_STORAGE=memory`, in-process buckets are used (single-node rescue) and Redis fail-closed does **not** apply; `auth:fail` still uses Redis and **fail-opens** (skips lock) if Redis is down. Prefer redis in production.
 - **Login fail lock**: `auth:fail:user:{username}` + `auth:fail:ip:{ip}` (default 5 / 15min → HTTP 429); successful login clears the username counter; complements IP QPS throttle.
 - **Audit**: async `record` for login success/failure/lock, logout, sensitive writes, upload; list requires `System:Audit:List`; `x-request-id` header.
 - **Upload**: local disk + UUID; MIME allow-list + **magic-bytes** (`file-type`); no SVG by default; `nosniff`; multer limit aligns with `UPLOAD_MAX_BYTES`.

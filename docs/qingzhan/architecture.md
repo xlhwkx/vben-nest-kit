@@ -33,7 +33,7 @@ Auth · User · Menu · System（用户/角色/菜单/部门/字典）· Upload 
 ## 横切（已交付要点）
 
 - **Swagger**：`http://localhost:5320/api/docs`；production 默认关，可用 `SWAGGER_ENABLED` 强制开关。
-- **限流**：全局默认约 120 次 / 60s；`POST /auth/login` 更严（默认 10 / 60s）→ HTTP 429 信封；Health 跳过。登录 throttler 在 Redis 故障时 **fail-closed（503）**；其它路由 fail-open + warn。
+- **限流**：全局默认约 120 次 / 60s；`POST /auth/login` 更严（默认 10 / 60s）→ HTTP 429 信封；Health 跳过。默认 `THROTTLE_STORAGE=redis`：登录 throttler 在 Redis 故障时 **fail-closed（503）**；其它路由 fail-open + warn。设 `THROTTLE_STORAGE=memory` 时改用进程内桶（单机急救），**无** Redis fail-closed；同时 `auth:fail` 仍读写 Redis——Redis 不可用时锁定检查 **fail-open**（跳过）。生产请保持 redis。
 - **登录失败锁定**：`auth:fail:user:{username}` + `auth:fail:ip:{ip}`（默认 5 次 / 15min → HTTP 429）；成功登录清零用户名计数；与 IP QPS 限流互补。
 - **审计**：login 成功/失败/锁定、logout、敏感写、upload 等异步 `record`；列表需 `System:Audit:List`；响应头 `x-request-id`。
 - **上传**：本地磁盘 + UUID；MIME 白名单 + **magic-bytes**（`file-type`）；默认无 SVG；`nosniff`；multer 上限对齐 `UPLOAD_MAX_BYTES`。

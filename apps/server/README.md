@@ -30,6 +30,8 @@ Swagger UI（非 production 默认开；生产设 `SWAGGER_ENABLED=true` 强制�
 - 登录 `POST /api/auth/login`（及 `/api/v1`）：`THROTTLE_LOGIN_LIMIT`（默认 10）/ `THROTTLE_LOGIN_TTL_MS`（默认 60s），超限 **429** 信封
 - Health（live/ready）`@SkipThrottle`；Swagger `/api/docs` 在 Nest 管道外
 - 存储默认 **Redis**（`THROTTLE_STORAGE=redis`）；可改 `memory`（单机急救，生产建议 Redis）
+- `memory` 模式：登录限流不走 Redis，**无** fail-closed；`auth:fail:*` 仍读写 Redis，Redis 不可用时锁定检查 fail-open（跳过）
+- `redis` 模式：登录 throttler Redis 故障 → HTTP **503** `Rate limit unavailable`
 
 ## E2E
 

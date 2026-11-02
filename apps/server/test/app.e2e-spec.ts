@@ -299,3 +299,60 @@ describe('Auth + Health (e2e)', () => {
     await redis.del(userKey);
   });
 });
+
+
+describe('Login throttle fail-closed (e2e)', () => {
+  let app: INestApplication<App>;
+  let redis: RedisService;
+
+  beforeAll(async () => {
+    // Dedicated app with Redis storage so login throttler can fail-closed.
+    process.env.THROTTLE_STORAGE = 'redis';
+    process.env.THROTTLE_LIMIT = '10000';
+    process.env.THROTTLE_LOGIN_LIMIT = '1000';
+    process.env.THROTTLE_TTL_MS = '60000';
+    process.env.THROTTLE_LOGIN_TTL_MS = '60000';
+    process.env.AUTH_FAIL_USER_MAX = '10000';
+    process.env.AUTH_FAIL_IP_MAX = '10000';
+
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+
+    app = moduleFixture.createNestApplication();
+    app.use(cookieParser());
+    app.setGlobalPrefix('api');
+    app.enableVersioning({
+      type: VersioningType.URI,
+      defaultVersion: VERSION_NEUTRAL,
+    });
+    app.useGlobalFilters(new HttpExceptionFilter());
+    await app.init();
+    redis = app.get(RedisService);
+    for (let i = 0; i < 10; i++) {
+      if (await redis.ping()) break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it('Redis eval failure on login → 503 Rate limit unavailable', async () => {
+    const client = redis.getClient();
+    const spy = jest
+      .spyOn(client, 'eval')
+      .mockRejectedValue(new Error('simulated redis down'));
+    try {
+      const res = await request(app.getHttpServer())
+        .post('/api/auth/login')
+        .send({ username: 'vben', password: '123456' })
+        .expect(503);
+      expect(res.body.code).toBe(-1);
+      expect(String(res.body.message)).toMatch(/rate limit unavailable/i);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
