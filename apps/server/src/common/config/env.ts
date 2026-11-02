@@ -48,6 +48,24 @@ const envSchema = z.object({
   AUTH_FAIL_USER_MAX: z.coerce.number().optional(),
   /** 可选：覆盖 IP 失败阈值（默认 = AUTH_FAIL_MAX） */
   AUTH_FAIL_IP_MAX: z.coerce.number().optional(),
+  /** 文件存储：local（默认）| s3（S3 兼容 / MinIO） */
+  STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
+  /** S3 / MinIO（仅 STORAGE_DRIVER=s3 时必填 bucket + credentials） */
+  S3_ENDPOINT: z.string().optional(),
+  S3_REGION: z.string().default('us-east-1'),
+  S3_BUCKET: z.string().optional(),
+  S3_ACCESS_KEY_ID: z.string().optional(),
+  S3_SECRET_ACCESS_KEY: z.string().optional(),
+  S3_FORCE_PATH_STYLE: boolish,
+  /** 返回给前端的对象公网前缀；省略则 endpoint/bucket 或 AWS 默认拼接 */
+  S3_PUBLIC_URL: z.string().optional(),
+  /** BullMQ 可选骨架：默认关，不连 Queue/Worker */
+  QUEUE_ENABLED: boolish,
+  /** 是否在本进程启动 stub Worker（默认关；生产建议独立 worker） */
+  QUEUE_WORKER_ENABLED: boolish,
+  /** 队列 Redis DB index（省略则复用 REDIS_URL 原 path） */
+  QUEUE_REDIS_DB: z.coerce.number().optional(),
+  QUEUE_PREFIX: z.string().default('qingzhan'),
 });
 
 export type AppEnv = z.infer<typeof envSchema> & {
@@ -66,6 +84,12 @@ export function loadEnv(raw: NodeJS.ProcessEnv = process.env): AppEnv {
   return {
     ...data,
     COOKIE_SECURE: Boolean(data.COOKIE_SECURE),
+    S3_FORCE_PATH_STYLE:
+      data.S3_FORCE_PATH_STYLE === undefined
+        ? true
+        : Boolean(data.S3_FORCE_PATH_STYLE),
+    QUEUE_ENABLED: Boolean(data.QUEUE_ENABLED),
+    QUEUE_WORKER_ENABLED: Boolean(data.QUEUE_WORKER_ENABLED),
     corsOrigins: data.CORS_ORIGINS.split(',')
       .map((s) => s.trim())
       .filter(Boolean),

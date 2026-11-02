@@ -6,4 +6,5 @@ allowBuilds:
   "@scarf/scarf": true
   argon2: true
   esbuild: true
+  msgpackr-extract: true
   prisma: true

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   Logger,
   OnModuleInit,
@@ -7,11 +8,15 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomUUID } from 'node:crypto';
-import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import type { Express } from 'express';
 import { fromBuffer } from 'file-type';
 import { AuditService } from '../audit/audit.service';
+import { LocalStorageProvider } from './storage/local.storage';
+import {
+  STORAGE_PROVIDER,
+  type StorageProvider,
+} from './storage/storage.types';
 
 // SVG (image/svg+xml) omitted by default (XSS); allow via UPLOAD_ALLOWED_MIME.
 const DEFAULT_ALLOWED = new Set([
@@ -51,28 +56,16 @@ function normalizeMime(mime: string): string {
 @Injectable()
 export class UploadService implements OnModuleInit {
   private readonly logger = new Logger(UploadService.name);
-  private uploadDir!: string;
-  private publicPath!: string;
-  private publicBaseUrl!: string;
   private maxBytes!: number;
   private allowedMimes!: Set<string>;
 
   constructor(
     private readonly config: ConfigService,
     private readonly audit: AuditService,
+    @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
   ) {}
 
-  async onModuleInit(): Promise<void> {
-    this.uploadDir = path.resolve(
-      this.config.get<string>('UPLOAD_DIR') ??
-        path.join(process.cwd(), 'uploads'),
-    );
-    this.publicPath = (
-      this.config.get<string>('UPLOAD_PUBLIC_PATH') ?? '/uploads'
-    ).replace(/\/$/, '');
-    this.publicBaseUrl = (
-      this.config.get<string>('APP_PUBLIC_URL') ?? 'http://localhost:5320'
-    ).replace(/\/$/, '');
+  onModuleInit(): void {
     this.maxBytes = Number(
       this.config.get<number>('UPLOAD_MAX_BYTES') ?? 5_242_880,
     );
@@ -85,17 +78,24 @@ export class UploadService implements OnModuleInit {
             .filter(Boolean),
         )
       : DEFAULT_ALLOWED;
-
-    await fs.mkdir(this.uploadDir, { recursive: true });
-    this.logger.log(`Upload dir ready: ${this.uploadDir}`);
+    this.logger.log(`Upload storage driver: ${this.storage.driver}`);
   }
 
+  /** Local disk root (static serving); empty string when not local. */
   getUploadDir(): string {
-    return this.uploadDir;
+    if (this.storage instanceof LocalStorageProvider) {
+      return this.storage.getUploadDir();
+    }
+    return '';
   }
 
   getPublicPath(): string {
-    return this.publicPath;
+    if (this.storage instanceof LocalStorageProvider) {
+      return this.storage.getPublicPath();
+    }
+    return (
+      this.config.get<string>('UPLOAD_PUBLIC_PATH') ?? '/uploads'
+    ).replace(/\/$/, '');
   }
 
   getMaxBytes(): number {
@@ -160,26 +160,25 @@ export class UploadService implements OnModuleInit {
     const ext = EXT_BY_MIME[mime] ?? (fromName || '');
     const safeExt = /^\.[a-z0-9.]+$/i.test(ext) ? ext : '';
     const name = `${randomUUID()}${safeExt}`;
-    const relDir = path.posix.join(yyyy, mm);
-    const absDir = path.join(this.uploadDir, yyyy, mm);
-    await fs.mkdir(absDir, { recursive: true });
+    const key = `${yyyy}/${mm}/${name}`;
 
-    const absFile = path.join(absDir, name);
-    await fs.writeFile(absFile, file.buffer, { flag: 'wx' });
+    const { url } = await this.storage.put({
+      key,
+      body: file.buffer,
+      contentType: mime,
+    });
 
     const sha = createHash('sha256')
       .update(file.buffer)
       .digest('hex')
       .slice(0, 12);
-    this.logger.debug(`saved ${relDir}/${name} sha256=${sha} mime=${mime}`);
+    this.logger.debug(`saved ${key} sha256=${sha} mime=${mime}`);
 
-    const urlPath = `${this.publicPath}/${relDir}/${name}`;
-    const url = `${this.publicBaseUrl}${urlPath}`;
     this.audit.record({
       action: 'upload.create',
       module: 'upload',
       status: 200,
-      detail: { mime, name: `${relDir}/${name}` },
+      detail: { mime, name: key, driver: this.storage.driver },
     });
     return { url };
   }

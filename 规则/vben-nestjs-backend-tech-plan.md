@@ -374,6 +374,8 @@ your-open-admin/
 
 **选择：策略模式 —— 默认 Local，可切换 S3 兼容（MinIO/AWS/OSS）。**
 
+实现开关：`STORAGE_DRIVER=local|s3`（默认 `local`）；S3 凭证仅走环境变量（`S3_*`），禁止写死密钥。队列：`QUEUE_ENABLED`（默认关）+ 可选 `QUEUE_WORKER_ENABLED`；BullMQ 复用 Redis（可用 `QUEUE_REDIS_DB` 分离）。
+
 | 后端 | 结论 | 原因 |
 |---|---|---|
 | Local disk | 默认 | Docker 一键演示零云账号 |

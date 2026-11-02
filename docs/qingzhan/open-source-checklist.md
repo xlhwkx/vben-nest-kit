@@ -27,8 +27,8 @@
 |----|------|
 | SliderCaptcha | web-antd 登录滑块阻碍 headless UI E2E / 静默 refresh 自动化勾选 |
 | 浏览器 §11 | Playwright 等 UI E2E 未做；人工冒烟见 architecture |
-| S3 / MinIO | 上传仍为本地磁盘 |
-| BullMQ | 生产任务队列尚未引入 |
+| S3 / MinIO | 可选 `STORAGE_DRIVER=s3` 骨架已有；默认仍 local |
+| BullMQ | 可选骨架已有（默认关）；独立 worker / 真业务未接 |
 | OAuth / 多租户 | 未做 |
 | 全 monorepo CI | 上游 `ci.yml` 仍绑定 `vbenjs/vue-vben-admin`；前端 CI 另议 |
 | `apps/server` lockfile | `pnpm-lock.yaml` gitignore（workspace 用根 lock）；server-only CI 非 frozen |

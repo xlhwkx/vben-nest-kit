@@ -12,6 +12,8 @@
 | 缓存 / 限流存储 | Redis 7（`ioredis`） |
 | 鉴权 | JWT Bearer + HttpOnly Cookie `jwt`（refresh）；Argon2id |
 | 限流 | `@nestjs/throttler`（默认 Redis storage） |
+| 文件存储 | 默认 Local；可选 S3 兼容（`STORAGE_DRIVER=s3`） |
+| 队列 | BullMQ 可选骨架（默认 `QUEUE_ENABLED=false`） |
 | 文档 | Swagger `/api/docs` |
 
 ## 双前缀与信封
@@ -36,12 +38,13 @@ Auth · User · Menu · System（用户/角色/菜单/部门/字典）· Upload 
 - **限流**：全局默认约 120 次 / 60s；`POST /auth/login` 更严（默认 10 / 60s）→ HTTP 429 信封；Health 跳过。默认 `THROTTLE_STORAGE=redis`：登录 throttler 在 Redis 故障时 **fail-closed（503）**；其它路由 fail-open + warn。设 `THROTTLE_STORAGE=memory` 时改用进程内桶（单机急救），**无** Redis fail-closed；同时 `auth:fail` 仍读写 Redis——Redis 不可用时锁定检查 **fail-open**（跳过）。生产请保持 redis。
 - **登录失败锁定**：`auth:fail:user:{username}` + `auth:fail:ip:{ip}`（默认 5 次 / 15min → HTTP 429）；成功登录清零用户名计数；与 IP QPS 限流互补。
 - **审计**：login 成功/失败/锁定、logout、敏感写、upload 等异步 `record`；列表需 `System:Audit:List`；响应头 `x-request-id`。
-- **上传**：本地磁盘 + UUID；MIME 白名单 + **magic-bytes**（`file-type`）；默认无 SVG；`nosniff`；multer 上限对齐 `UPLOAD_MAX_BYTES`。
+- **上传**：`StorageProvider`（local 默认 / s3 可选）+ UUID；MIME 白名单 + **magic-bytes**（`file-type`）；默认无 SVG；`nosniff`；multer 上限对齐 `UPLOAD_MAX_BYTES`。
+- **队列**：`QueueModule` + BullMQ（mail / audit-archive 占位）；默认关闭，不连 Worker；`QUEUE_ENABLED` / `QUEUE_WORKER_ENABLED`。
 
 ## 明确未做（勿当成已交付）
 
-- 对象存储（S3 / MinIO）切换
-- BullMQ 生产任务（尚未引入）
+- 对象存储生产运维（MinIO Compose 一键 / 生命周期策略等仍可选）
+- BullMQ 独立 worker 进程与真实邮件/归档业务（仅有 stub 骨架）
 - web-antd **SliderCaptcha** 阻碍自动化 UI 登录 / 静默 refresh 勾选
 - Playwright（或同类）浏览器 UI E2E；合同 §11 页面实跑仍记缺口
 - OAuth / 多租户 / 完整 Clean Architecture

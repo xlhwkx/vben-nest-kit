@@ -12,6 +12,8 @@
 | Cache / throttle store | Redis 7 (`ioredis`) |
 | Auth | JWT Bearer + HttpOnly Cookie `jwt` (refresh); Argon2id |
 | Throttle | `@nestjs/throttler` (Redis storage by default) |
+| File storage | Local by default; optional S3-compatible (`STORAGE_DRIVER=s3`) |
+| Queue | Optional BullMQ skeleton (`QUEUE_ENABLED=false` by default) |
 | Docs | Swagger `/api/docs` |
 
 ## Dual prefix and envelope
@@ -37,11 +39,12 @@ Auth · User · Menu · System (user/role/menu/dept/dict) · Upload · Health ·
 - **Login fail lock**: `auth:fail:user:{username}` + `auth:fail:ip:{ip}` (default 5 / 15min → HTTP 429); successful login clears the username counter; complements IP QPS throttle.
 - **Audit**: async `record` for login success/failure/lock, logout, sensitive writes, upload; list requires `System:Audit:List`; `x-request-id` header.
 - **Upload**: local disk + UUID; MIME allow-list + **magic-bytes** (`file-type`); no SVG by default; `nosniff`; multer limit aligns with `UPLOAD_MAX_BYTES`.
+- **Queue**: optional BullMQ skeleton (`QUEUE_ENABLED` default false)
 
 ## Explicitly not done
 
-- S3 / MinIO object storage switch
-- BullMQ production job workers (not introduced yet)
+- Production object-storage ops (optional MinIO Compose, lifecycle policies)
+- Dedicated BullMQ worker process and real mail/archive jobs (stub skeleton only)
 - web-antd **SliderCaptcha** blocks headless UI login / silent-refresh automation
 - Playwright (or similar) browser UI E2E; contract §11 UI checklist still open
 - OAuth / multi-tenant / full Clean Architecture

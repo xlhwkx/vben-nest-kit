@@ -4,6 +4,12 @@ import { MulterModule } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { UploadController } from './upload.controller';
 import { UploadService } from './upload.service';
+import { LocalStorageProvider } from './storage/local.storage';
+import { S3StorageProvider } from './storage/s3.storage';
+import {
+  STORAGE_PROVIDER,
+  type StorageProvider,
+} from './storage/storage.types';
 
 @Module({
   imports: [
@@ -22,8 +28,26 @@ import { UploadService } from './upload.service';
     }),
   ],
   controllers: [UploadController],
-  providers: [UploadService],
-  exports: [UploadService],
+  providers: [
+    {
+      provide: STORAGE_PROVIDER,
+      inject: [ConfigService],
+      useFactory: async (config: ConfigService): Promise<StorageProvider> => {
+        const driver = config.get<string>('STORAGE_DRIVER') ?? 'local';
+        // Only construct the selected driver so S3 env is not required when local.
+        if (driver === 's3') {
+          const s3 = new S3StorageProvider(config);
+          s3.onModuleInit();
+          return s3;
+        }
+        const local = new LocalStorageProvider(config);
+        await local.onModuleInit();
+        return local;
+      },
+    },
+    UploadService,
+  ],
+  exports: [UploadService, STORAGE_PROVIDER],
 })
 /* oxlint-disable-next-line typescript/no-extraneous-class -- Nest feature module */
 export class UploadModule {}

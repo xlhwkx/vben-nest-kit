@@ -6,6 +6,7 @@
 ## Unreleased
 
 ### Added
+- M4 可选骨架：`StorageProvider`（local 默认 / s3 兼容 MinIO）；`QueueModule` + BullMQ（mail / audit-archive 占位，`QUEUE_ENABLED` 默认关）
 - GitHub Actions：`.github/workflows/qingzhan-server-e2e.yml`（Compose PG16+Redis7、随机 JWT、server-only e2e）
 - `docs/qingzhan/open-source-checklist.md` 开源前检查清单
 - 登录失败锁定：`auth:fail:user:{username}` + `auth:fail:ip:{ip}`（`AUTH_FAIL_MAX` / `AUTH_FAIL_WINDOW_SEC`，默认 5 次 / 15min）→ HTTP **429**；成功登录清零用户名计数；审计 `auth.login_locked`
