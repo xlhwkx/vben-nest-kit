@@ -16,7 +16,7 @@
 | system CRUD list | OK | Nest supersets (`code`/`username`/`roles`); **createTime ISO** |
 | demo P2 | OK | table/status/timezone/bigint |
 | **Fixed this slice** | user write + time + naming | see below |
-| Remaining gaps | last section | CI builds / captcha / mail / public |
+| Remaining gaps | last section | public repo/Release / live SMTP / full UI E2E |
 
 ---
 
@@ -74,6 +74,7 @@
 | Priority | Item | Suggestion |
 |----------|------|------------|
 | P2 | CI drop `dangerouslyAllowAllBuilds` | **done**: root `allowBuilds` + `pnpm install --filter @qingzhan/server...` |
-| Later | SliderCaptcha UI E2E, real mail, public repo/Release | wait for user approval |
+| Later | public repo/Release；真 SMTP 联调；Playwright 整页 UI | wait for user approval |
+| Done (harness) | SliderCaptcha E2E bypass + MailProvider console/smtp dry-run | this knife |
 
 Repo visibility unchanged; no Release cut.

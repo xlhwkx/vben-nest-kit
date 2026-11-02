@@ -17,16 +17,32 @@ import { SkipEnvelope } from '../../common/decorators/skip-envelope.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
 import { AuthService } from './auth.service';
+import { CaptchaService } from './captcha/captcha.service';
 
 const loginSchema = z.object({
   username: z.string().min(1),
   password: z.string().min(1),
+  captchaId: z.string().optional(),
+  captchaToken: z.string().optional(),
 });
 
 @ApiTags('Auth')
 @Controller({ path: 'auth', version: [VERSION_NEUTRAL, '1'] })
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly captcha: CaptchaService,
+  ) {}
+
+  /**
+   * Issue one-time captcha challenge (for CAPTCHA_REQUIRED=true).
+   * With CAPTCHA_E2E_BYPASS=1 returns fixed e2e token.
+   */
+  @Public()
+  @Get('captcha')
+  async captchaChallenge() {
+    return this.captcha.issueChallenge();
+  }
 
   @Public()
   @Post('login')
@@ -43,6 +59,10 @@ export class AuthController {
         error: 'Username and password are required',
       });
     }
+    await this.captcha.assertLoginCaptcha({
+      captchaId: parsed.data.captchaId,
+      captchaToken: parsed.data.captchaToken,
+    });
     const ip = typeof req.ip === 'string' ? req.ip : undefined;
     return this.auth.login(parsed.data, res, ip);
   }
@@ -52,10 +72,7 @@ export class AuthController {
   @SkipEnvelope()
   @Post('refresh')
   @HttpCode(200)
-  async refresh(
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
-  ): Promise<string> {
+  async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<string> {
     const cookie = req.cookies?.jwt as string | undefined;
     return this.auth.refresh(cookie, res);
   }
@@ -63,10 +80,7 @@ export class AuthController {
   @Public()
   @Post('logout')
   @HttpCode(200)
-  async logout(
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
-  ): Promise<string> {
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<string> {
     const cookie = req.cookies?.jwt as string | undefined;
     return this.auth.logout(cookie, res);
   }

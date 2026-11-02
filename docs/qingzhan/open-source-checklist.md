@@ -25,10 +25,10 @@
 
 | 项 | 说明 |
 |----|------|
-| SliderCaptcha | web-antd 登录滑块阻碍 headless UI E2E / 静默 refresh 自动化勾选 |
+| SliderCaptcha | 已提供旁路：`VITE_CAPTCHA_E2E_BYPASS` + `CAPTCHA_E2E_BYPASS`；生产仍拖滑块；可选 `CAPTCHA_REQUIRED` |
 | 浏览器 §11 | Playwright 等 UI E2E 未做；人工冒烟见 architecture |
 | S3 / MinIO | 可选 `STORAGE_DRIVER=s3` 骨架已有；默认仍 local |
-| BullMQ | 可选骨架已有（默认关）；独立 worker / 真业务未接 |
+| BullMQ | 可选骨架已有（默认关）；`MailProvider` console/smtp dry-run；独立 worker / 真 SMTP 未接 |
 | OAuth / 多租户 | 未做 |
 | 全 monorepo CI | 上游 `ci.yml` 仍绑定 `vbenjs/vue-vben-admin`；前端 CI 另议 |
 | `apps/server` lockfile | `pnpm-lock.yaml` gitignore（workspace 用根 lock）；server-only CI 非 frozen |

@@ -66,6 +66,21 @@ const envSchema = z.object({
   /** 队列 Redis DB index（省略则复用 REDIS_URL 原 path） */
   QUEUE_REDIS_DB: z.coerce.number().optional(),
   QUEUE_PREFIX: z.string().default('qingzhan'),
+  /**
+   * Captcha: default off on API (contract login = username+password).
+   * Set CAPTCHA_REQUIRED=true to enforce one-time challenge on login.
+   * CAPTCHA_E2E_BYPASS=1 skips checks (tests / headless only — never production).
+   */
+  CAPTCHA_REQUIRED: boolish,
+  CAPTCHA_E2E_BYPASS: boolish,
+  /** Mail sink: console (default, no network) | smtp (dry-run skeleton). */
+  MAIL_DRIVER: z.enum(['console', 'smtp']).default('console'),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().default(587),
+  SMTP_SECURE: boolish,
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().optional(),
 });
 
 export type AppEnv = z.infer<typeof envSchema> & {
@@ -75,9 +90,7 @@ export type AppEnv = z.infer<typeof envSchema> & {
 export function loadEnv(raw: NodeJS.ProcessEnv = process.env): AppEnv {
   const parsed = envSchema.safeParse(raw);
   if (!parsed.success) {
-    const msg = parsed.error.issues
-      .map((i) => `${i.path.join('.')}: ${i.message}`)
-      .join('; ');
+    const msg = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
     throw new Error(`Invalid environment: ${msg}`);
   }
   const data = parsed.data;
@@ -85,11 +98,12 @@ export function loadEnv(raw: NodeJS.ProcessEnv = process.env): AppEnv {
     ...data,
     COOKIE_SECURE: Boolean(data.COOKIE_SECURE),
     S3_FORCE_PATH_STYLE:
-      data.S3_FORCE_PATH_STYLE === undefined
-        ? true
-        : Boolean(data.S3_FORCE_PATH_STYLE),
+      data.S3_FORCE_PATH_STYLE === undefined ? true : Boolean(data.S3_FORCE_PATH_STYLE),
     QUEUE_ENABLED: Boolean(data.QUEUE_ENABLED),
     QUEUE_WORKER_ENABLED: Boolean(data.QUEUE_WORKER_ENABLED),
+    CAPTCHA_REQUIRED: Boolean(data.CAPTCHA_REQUIRED),
+    CAPTCHA_E2E_BYPASS: Boolean(data.CAPTCHA_E2E_BYPASS),
+    SMTP_SECURE: Boolean(data.SMTP_SECURE),
     corsOrigins: data.CORS_ORIGINS.split(',')
       .map((s) => s.trim())
       .filter(Boolean),

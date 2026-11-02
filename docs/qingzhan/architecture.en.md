@@ -41,20 +41,20 @@ Auth · User · Menu · System (user/role/menu/dept/dict) · Upload · Health ·
 - **Login fail lock**: `auth:fail:user:{username}` + `auth:fail:ip:{ip}` (default 5 / 15min → HTTP 429); successful login clears the username counter; complements IP QPS throttle.
 - **Audit**: async `record` for login success/failure/lock, logout, sensitive writes, upload; list requires `System:Audit:List`; `x-request-id` header.
 - **Upload**: local disk + UUID; MIME allow-list + **magic-bytes** (`file-type`); no SVG by default; `nosniff`; multer limit aligns with `UPLOAD_MAX_BYTES`.
-- **Queue**: optional BullMQ skeleton (`QUEUE_ENABLED` default false)
+- **Queue**: optional BullMQ skeleton (`QUEUE_ENABLED` default false); `MAIL_DRIVER=console|smtp` (console default, smtp dry-run)
+- **Captcha**: production UI keeps web-antd **SliderCaptcha**; API does not require captcha by default (contract). `CAPTCHA_REQUIRED=true` enforces `GET /api/auth/captcha` tokens on login; `CAPTCHA_E2E_BYPASS=1` + `VITE_CAPTCHA_E2E_BYPASS` are test-only (never production).
 
 ## Explicitly not done
 
 - Production object-storage ops (optional MinIO Compose, lifecycle policies)
-- Dedicated BullMQ worker process and real mail/archive jobs (stub skeleton only)
-- web-antd **SliderCaptcha** blocks headless UI login / silent-refresh automation
-- Playwright (or similar) browser UI E2E; contract §11 UI checklist still open
+- Dedicated BullMQ worker process and live SMTP delivery (console/smtp dry-run skeleton present; no outbound by default)
+- Full Playwright UI E2E still optional; SliderCaptcha has an E2E bypass harness
 - OAuth / multi-tenant / full Clean Architecture
 
 ## Manual smoke (contract §11)
 
 1. Root `pnpm install`, then `pnpm dev:antd` + Nest `:5320`
-2. Open login, **drag the slider**, sign in as `vben` / `123456`
+2. Open login, **drag the slider**, sign in as `vben` / `123456` (or set `VITE_CAPTCHA_E2E_BYPASS=true` for local/E2E only)
 3. Confirm menus; optional: shorten `JWT_ACCESS_TTL` and watch silent refresh
 
 ## See also

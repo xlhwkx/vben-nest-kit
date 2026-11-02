@@ -41,7 +41,8 @@ Auth · User · Menu · System（用户/角色/菜单/部门/字典）· Upload 
 - **登录失败锁定**：`auth:fail:user:{username}` + `auth:fail:ip:{ip}`（默认 5 次 / 15min → HTTP 429）；成功登录清零用户名计数；与 IP QPS 限流互补。
 - **审计**：login 成功/失败/锁定、logout、敏感写、upload 等异步 `record`；列表需 `System:Audit:List`；响应头 `x-request-id`。
 - **上传**：`StorageProvider`（local 默认 / s3 可选）+ UUID；MIME 白名单 + **magic-bytes**（`file-type`）；默认无 SVG；`nosniff`；multer 上限对齐 `UPLOAD_MAX_BYTES`。
-- **队列**：`QueueModule` + BullMQ（mail / audit-archive 占位）；默认关闭，不连 Worker；`QUEUE_ENABLED` / `QUEUE_WORKER_ENABLED`。
+- **队列**：`QueueModule` + BullMQ（mail / audit-archive）；默认关闭；`MAIL_DRIVER=console|smtp`（默认 console，smtp 仅 dry-run）。
+- **验证码**：生产 UI 仍用 web-antd **SliderCaptcha**；服务端默认不强制（合同 login 仅用户名密码）。`CAPTCHA_REQUIRED=true` 时 login 须带 `GET /api/auth/captcha` 票据；`CAPTCHA_E2E_BYPASS=1` + 前端 `VITE_CAPTCHA_E2E_BYPASS` 仅测试旁路（禁止生产开启）。
 
 
 
@@ -53,15 +54,14 @@ Auth · User · Menu · System（用户/角色/菜单/部门/字典）· Upload 
 ## 明确未做（勿当成已交付）
 
 - 对象存储生产运维（MinIO Compose 一键 / 生命周期策略等仍可选）
-- BullMQ 独立 worker 进程与真实邮件/归档业务（仅有 stub 骨架）
-- web-antd **SliderCaptcha** 阻碍自动化 UI 登录 / 静默 refresh 勾选
-- Playwright（或同类）浏览器 UI E2E；合同 §11 页面实跑仍记缺口
+- BullMQ 独立 worker 进程与生产 SMTP 投递（已有 console/smtp dry-run 骨架，默认不连外网）
+- Playwright（浏览器）整页 UI E2E 仍可选；SliderCaptcha 已提供 E2E 旁路 harness
 - OAuth / 多租户 / 完整 Clean Architecture
 
 ## 人工冒烟（§11）
 
 1. 根目录 `pnpm install` 后 `pnpm dev:antd` + Nest `:5320`
-2. 浏览器打开登录页，**拖动滑块**后以 `vben` / `123456` 登录
+2. 浏览器打开登录页，**拖动滑块**后以 `vben` / `123456` 登录（或本地设 `VITE_CAPTCHA_E2E_BYPASS=true` 跳过滑块，仅开发/E2E）
 3. 确认菜单加载；可选：缩短 `JWT_ACCESS_TTL` 后观察静默 refresh
 
 ## 相关链接

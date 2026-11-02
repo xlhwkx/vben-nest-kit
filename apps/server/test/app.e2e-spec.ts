@@ -30,6 +30,9 @@ describe('Auth + Health (e2e)', () => {
     process.env.AUTH_FAIL_USER_MAX = '5';
     process.env.AUTH_FAIL_IP_MAX = '10000';
     process.env.AUTH_FAIL_WINDOW_SEC = '900';
+    // Contract login path: captcha not required unless a dedicated suite opts in.
+    process.env.CAPTCHA_REQUIRED = 'false';
+    process.env.CAPTCHA_E2E_BYPASS = 'false';
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -660,6 +663,121 @@ describe('Auth + Health (e2e)', () => {
 
   it('GET /api/demo/bigint without token → 401', async () => {
     await request(app.getHttpServer()).get('/api/demo/bigint').expect(401);
+  });
+});
+
+describe('Captcha harness (e2e)', () => {
+  let app: INestApplication<App>;
+
+  beforeAll(async () => {
+    // Dedicated app; flags toggled per-test via process.env (CaptchaService reads live).
+    process.env.CAPTCHA_REQUIRED = 'false';
+    process.env.CAPTCHA_E2E_BYPASS = 'false';
+    process.env.THROTTLE_STORAGE = 'memory';
+    process.env.THROTTLE_LIMIT = '10000';
+    process.env.THROTTLE_LOGIN_LIMIT = '1000';
+    process.env.AUTH_FAIL_MAX = '10000';
+    process.env.AUTH_FAIL_USER_MAX = '10000';
+    process.env.AUTH_FAIL_IP_MAX = '10000';
+
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+    app = moduleFixture.createNestApplication();
+    app.use(cookieParser());
+    app.setGlobalPrefix('api');
+    app.enableVersioning({
+      type: VersioningType.URI,
+      defaultVersion: VERSION_NEUTRAL,
+    });
+    app.useGlobalFilters(new HttpExceptionFilter());
+    await app.init();
+
+    try {
+      const redis = app.get(RedisService);
+      for (let i = 0; i < 10; i++) {
+        if (await redis.ping()) break;
+        await new Promise((r) => setTimeout(r, 200));
+      }
+      const client = redis.getClient();
+      for (const pattern of ['auth:fail:*', 'captcha:*', 'qz:throttle:*']) {
+        const keys = await client.keys(pattern);
+        if (keys.length > 0) await client.del(...keys);
+      }
+    } catch {
+      // ignore
+    }
+  });
+
+  afterEach(() => {
+    process.env.CAPTCHA_REQUIRED = 'false';
+    process.env.CAPTCHA_E2E_BYPASS = 'false';
+  });
+
+  afterAll(async () => {
+    await app?.close();
+    process.env.CAPTCHA_REQUIRED = 'false';
+    process.env.CAPTCHA_E2E_BYPASS = 'false';
+  });
+
+  async function clearAuthFail(): Promise<void> {
+    try {
+      const redis = app.get(RedisService);
+      const client = redis.getClient();
+      for (const pattern of ['auth:fail:*', 'qz:throttle:*']) {
+        const keys = await client.keys(pattern);
+        if (keys.length > 0) await client.del(...keys);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  it('CAPTCHA_REQUIRED without token → 400', async () => {
+    await clearAuthFail();
+    process.env.CAPTCHA_REQUIRED = 'true';
+    process.env.CAPTCHA_E2E_BYPASS = 'false';
+    const res = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ username: 'vben', password: '123456' });
+    expect(res.status).toBe(400);
+    expect(String(res.body.error ?? res.body.message)).toMatch(/captcha/i);
+  });
+
+  it('CAPTCHA_REQUIRED + GET /auth/captcha then login → 200', async () => {
+    await clearAuthFail();
+    process.env.CAPTCHA_REQUIRED = 'true';
+    process.env.CAPTCHA_E2E_BYPASS = 'false';
+
+    const ch = await request(app.getHttpServer()).get('/api/auth/captcha').expect(200);
+    expect(ch.body.code).toBe(0);
+    expect(ch.body.data.captchaId).toBeTruthy();
+    expect(ch.body.data.captchaToken).toBeTruthy();
+
+    const res = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({
+        username: 'vben',
+        password: '123456',
+        captchaId: ch.body.data.captchaId,
+        captchaToken: ch.body.data.captchaToken,
+      })
+      .expect(200);
+    expect(res.body.code).toBe(0);
+    expect(res.body.data.accessToken).toBeTruthy();
+    expect(res.body.data).not.toHaveProperty('password');
+  });
+
+  it('CAPTCHA_E2E_BYPASS=1 → login without captcha → 200', async () => {
+    await clearAuthFail();
+    process.env.CAPTCHA_REQUIRED = 'true';
+    process.env.CAPTCHA_E2E_BYPASS = 'true';
+    const res = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ username: 'vben', password: '123456' })
+      .expect(200);
+    expect(res.body.code).toBe(0);
+    expect(res.body.data.accessToken).toBeTruthy();
   });
 });
 

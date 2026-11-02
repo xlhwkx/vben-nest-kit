@@ -6,6 +6,8 @@
 ## Unreleased
 
 ### Added
+- Captcha harness：`GET /api/auth/captcha`；`CAPTCHA_REQUIRED`（默认关，合同兼容）+ `CAPTCHA_E2E_BYPASS`（仅测试）；web-antd `VITE_CAPTCHA_E2E_BYPASS` 隐藏滑块自动过
+- Mail：`MailProvider`（`console` 默认 / `smtp` dry-run 骨架）；BullMQ mail worker 脱敏日志；不连真 SMTP
 - `docs/qingzhan/mock-field-parity.md`：backend-mock vs Nest 字段级对账与剩余缺口
 - e2e：`GET /system/role/list` 字段锁；`POST` 无 code 自动 slug + `PUT {status}` 部分更新
 - P2 timezone: `GET/POST /api/timezone/*` (getTimezone Bearer, getTimezoneOptions public, setTimezone whitelist)

@@ -13,6 +13,16 @@ defineOptions({ name: 'Login' });
 
 const authStore = useAuthStore();
 
+/**
+ * Headless / Playwright harness only.
+ * Set VITE_CAPTCHA_E2E_BYPASS=true in .env.development (never production).
+ * When on: captcha field auto-passes and SliderCaptcha is hidden.
+ * Pair with server CAPTCHA_E2E_BYPASS=1 if CAPTCHA_REQUIRED=true.
+ */
+const captchaE2eBypass =
+  import.meta.env.VITE_CAPTCHA_E2E_BYPASS === 'true' ||
+  import.meta.env.VITE_CAPTCHA_E2E_BYPASS === '1';
+
 const MOCK_USER_OPTIONS: BasicOption[] = [
   {
     label: 'Super',
@@ -29,7 +39,7 @@ const MOCK_USER_OPTIONS: BasicOption[] = [
 ];
 
 const formSchema = computed((): VbenFormSchema[] => {
-  return [
+  const schema: VbenFormSchema[] = [
     {
       component: 'VbenSelect',
       componentProps: {
@@ -78,14 +88,32 @@ const formSchema = computed((): VbenFormSchema[] => {
       label: $t('authentication.password'),
       rules: z.string().min(1, { message: $t('authentication.passwordTip') }),
     },
-    {
+  ];
+
+  if (captchaE2eBypass) {
+    // Auto-pass captcha for headless E2E; do not render SliderCaptcha.
+    schema.push({
+      component: 'VbenInput',
+      componentProps: { type: 'hidden' },
+      defaultValue: true,
+      fieldName: 'captcha',
+      dependencies: {
+        if: () => false,
+        triggerFields: [],
+      },
+      rules: z.boolean().optional().default(true),
+    });
+  } else {
+    schema.push({
       component: markRaw(SliderCaptcha),
       fieldName: 'captcha',
       rules: z.boolean().refine((value) => value, {
         message: $t('authentication.verifyRequiredTip'),
       }),
-    },
-  ];
+    });
+  }
+
+  return schema;
 });
 </script>
 
