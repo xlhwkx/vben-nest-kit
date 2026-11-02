@@ -49,7 +49,9 @@ function formatCreateTime(d: Date): string {
   return createTimeFormatter.format(d);
 }
 
-/** Normalize contract pid: 0 / null / undefined / "" => null (root). */
+/** Normalize explicit pid: 0 / null / "" => null (root); uuid => string.
+ *  Callers that need "omit means keep" must check `pid !== undefined` before calling.
+ */
 function normalizePid(pid: string | number | null | undefined): string | null {
   if (pid === undefined || pid === null) return null;
   const s = String(pid).trim();
@@ -107,22 +109,26 @@ export class SystemDeptService {
     const name = input.name?.trim();
     if (!name) throw new BadRequestException("name is required");
 
-    const parentId = normalizePid(input.pid);
-    if (parentId === id) {
-      throw new BadRequestException("Dept cannot be its own parent");
-    }
-    if (parentId) {
-      await this.requireActiveDept(parentId);
-      const descendantIds = await this.collectDescendantIds(id);
-      if (descendantIds.has(parentId)) {
-        throw new BadRequestException("Cannot move dept under its descendant");
+    // Only change parent when `pid` is explicitly present (incl. 0/null/"" => root).
+    const hasPidField = input.pid !== undefined;
+    const parentId = hasPidField ? normalizePid(input.pid) : existing.parentId;
+    if (hasPidField) {
+      if (parentId === id) {
+        throw new BadRequestException("Dept cannot be its own parent");
+      }
+      if (parentId) {
+        await this.requireActiveDept(parentId);
+        const descendantIds = await this.collectDescendantIds(id);
+        if (descendantIds.has(parentId)) {
+          throw new BadRequestException("Cannot move dept under its descendant");
+        }
       }
     }
 
     const row = await this.prisma.dept.update({
       where: { id },
       data: {
-        parentId,
+        ...(hasPidField ? { parentId } : {}),
         name,
         status: input.status === 0 || input.status === 1 ? input.status : existing.status,
         remark:
