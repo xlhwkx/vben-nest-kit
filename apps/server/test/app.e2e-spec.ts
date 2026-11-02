@@ -340,19 +340,24 @@ describe('Login throttle fail-closed (e2e)', () => {
   });
 
   it('Redis eval failure on login → 503 Rate limit unavailable', async () => {
-    const client = redis.getClient();
-    const spy = jest
-      .spyOn(client, 'eval')
+    // ioredis attaches commands on a prototype/proxy; jest.spyOn(client, 'eval')
+    // is unreliable under Jest+Node ESM on CI. Stub getClient instead.
+    const evalMock = jest
+      .fn()
       .mockRejectedValue(new Error('simulated redis down'));
+    const getClientSpy = jest.spyOn(redis, 'getClient').mockReturnValue({
+      eval: evalMock,
+    } as ReturnType<RedisService['getClient']>);
     try {
       const res = await request(app.getHttpServer())
         .post('/api/auth/login')
         .send({ username: 'vben', password: '123456' })
         .expect(503);
+      expect(evalMock).toHaveBeenCalled();
       expect(res.body.code).toBe(-1);
       expect(String(res.body.message)).toMatch(/rate limit unavailable/i);
     } finally {
-      spy.mockRestore();
+      getClientSpy.mockRestore();
     }
   });
 });

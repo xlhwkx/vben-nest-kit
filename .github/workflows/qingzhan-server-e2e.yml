@@ -51,7 +51,7 @@ jobs:
       COOKIE_SAME_SITE: lax
       CORS_ORIGINS: http://localhost:5666
       APP_PUBLIC_URL: http://localhost:5320
-      THROTTLE_STORAGE: memory
+      THROTTLE_STORAGE: redis
       THROTTLE_LIMIT: "10000"
       THROTTLE_LOGIN_LIMIT: "1000"
       AUTH_FAIL_MAX: "5"
