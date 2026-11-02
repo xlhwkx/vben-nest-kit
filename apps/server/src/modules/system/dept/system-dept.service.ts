@@ -3,9 +3,10 @@ import {
   BadRequestException,
   ConflictException,
   NotFoundException,
-} from "@nestjs/common";
-import { PrismaService } from "../../../prisma/prisma.service";
-import { AuditService } from "../../audit/audit.service";
+} from '@nestjs/common';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { AuditService } from '../../audit/audit.service';
+import { formatCreateTimeIso } from '../../../common/format-create-time';
 
 export type SystemDeptNode = {
   id: string;
@@ -35,28 +36,13 @@ type DeptRow = {
   createdAt: Date;
 };
 
-const createTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
-  timeZone: "Asia/Shanghai",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-  hour12: false,
-});
-
-function formatCreateTime(d: Date): string {
-  return createTimeFormatter.format(d);
-}
-
 /** Normalize explicit pid: 0 / null / "" => null (root); uuid => string.
  *  Callers that need "omit means keep" must check `pid !== undefined` before calling.
  */
 function normalizePid(pid: string | number | null | undefined): string | null {
   if (pid === undefined || pid === null) return null;
   const s = String(pid).trim();
-  if (!s || s === "0" || s === "null" || s === "undefined") return null;
+  if (!s || s === '0' || s === 'null' || s === 'undefined') return null;
   return s;
 }
 
@@ -66,7 +52,7 @@ function toNode(row: DeptRow): SystemDeptNode {
     pid: row.parentId ?? 0,
     name: row.name,
     status: row.status,
-    createTime: formatCreateTime(row.createdAt),
+    createTime: formatCreateTimeIso(row.createdAt),
   };
   if (row.remark) node.remark = row.remark;
   return node;
@@ -83,14 +69,14 @@ export class SystemDeptService {
   async list(): Promise<SystemDeptNode[]> {
     const rows = await this.prisma.dept.findMany({
       where: { deletedAt: null },
-      orderBy: [{ sortOrder: "asc" }, { name: "asc" }, { createdAt: "asc" }],
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }, { createdAt: 'asc' }],
     });
     return this.buildTree(rows);
   }
 
   async create(input: SystemDeptInput): Promise<SystemDeptNode> {
     const name = input.name?.trim();
-    if (!name) throw new BadRequestException("name is required");
+    if (!name) throw new BadRequestException('name is required');
 
     const parentId = normalizePid(input.pid);
     if (parentId) {
@@ -106,8 +92,8 @@ export class SystemDeptService {
       },
     });
     this.audit.record({
-      action: "system.dept.create",
-      module: "system.dept",
+      action: 'system.dept.create',
+      module: 'system.dept',
       status: 200,
       detail: { id: row.id, name: row.name },
     });
@@ -117,20 +103,20 @@ export class SystemDeptService {
   async update(id: string, input: SystemDeptInput): Promise<SystemDeptNode> {
     const existing = await this.requireActiveDept(id);
     const name = input.name?.trim();
-    if (!name) throw new BadRequestException("name is required");
+    if (!name) throw new BadRequestException('name is required');
 
     // Only change parent when `pid` is explicitly present (incl. 0/null/"" => root).
     const hasPidField = input.pid !== undefined;
     const parentId = hasPidField ? normalizePid(input.pid) : existing.parentId;
     if (hasPidField) {
       if (parentId === id) {
-        throw new BadRequestException("Dept cannot be its own parent");
+        throw new BadRequestException('Dept cannot be its own parent');
       }
       if (parentId) {
         await this.requireActiveDept(parentId);
         const descendantIds = await this.collectDescendantIds(id);
         if (descendantIds.has(parentId)) {
-          throw new BadRequestException("Cannot move dept under its descendant");
+          throw new BadRequestException('Cannot move dept under its descendant');
         }
       }
     }
@@ -141,15 +127,12 @@ export class SystemDeptService {
         ...(hasPidField ? { parentId } : {}),
         name,
         status: input.status === 0 || input.status === 1 ? input.status : existing.status,
-        remark:
-          input.remark === undefined
-            ? existing.remark
-            : input.remark?.trim() || null,
+        remark: input.remark === undefined ? existing.remark : input.remark?.trim() || null,
       },
     });
     this.audit.record({
-      action: "system.dept.update",
-      module: "system.dept",
+      action: 'system.dept.update',
+      module: 'system.dept',
       status: 200,
       detail: { id: row.id, name: row.name },
     });
@@ -166,14 +149,14 @@ export class SystemDeptService {
       where: { parentId: id, deletedAt: null },
     });
     if (childCount > 0) {
-      throw new ConflictException("Dept has child departments; remove children first");
+      throw new ConflictException('Dept has child departments; remove children first');
     }
 
     const userCount = await this.prisma.user.count({
       where: { deptId: id, deletedAt: null },
     });
     if (userCount > 0) {
-      throw new ConflictException("Dept still has users assigned; reassign first");
+      throw new ConflictException('Dept still has users assigned; reassign first');
     }
 
     const now = new Date();
@@ -182,8 +165,8 @@ export class SystemDeptService {
       data: { deletedAt: now, status: 0 },
     });
     this.audit.record({
-      action: "system.dept.delete",
-      module: "system.dept",
+      action: 'system.dept.delete',
+      module: 'system.dept',
       status: 200,
       detail: { id },
     });
@@ -200,7 +183,7 @@ export class SystemDeptService {
       where: { id, deletedAt: null },
     });
     if (!row) {
-      throw new NotFoundException("Dept not found");
+      throw new NotFoundException('Dept not found');
     }
     return row;
   }
@@ -219,8 +202,9 @@ export class SystemDeptService {
     }
     const out = new Set<string>();
     const stack = [...(children.get(rootId) ?? [])];
-    while (stack.length) {
-      const cur = stack.pop()!;
+    while (stack.length > 0) {
+      const cur = stack.pop();
+      if (cur === undefined) continue;
       if (out.has(cur)) continue;
       out.add(cur);
       for (const c of children.get(cur) ?? []) stack.push(c);
@@ -250,11 +234,11 @@ export class SystemDeptService {
       const kids = childrenMap.get(row.id) ?? [];
       const node = toNode(row);
       if (kids.length > 0) {
-        node.children = kids.map(toTreeNode);
+        node.children = kids.map((kid) => toTreeNode(kid));
       }
       return node;
     };
 
-    return (childrenMap.get(null) ?? []).map(toTreeNode);
+    return (childrenMap.get(null) ?? []).map((row) => toTreeNode(row));
   }
 }

@@ -9,6 +9,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { RedisService } from '../../../redis/redis.service';
 import { AuditService } from '../../audit/audit.service';
 import { parseListCreatedAtRange } from '../../../common/parse-list-time-range';
+import { formatCreateTimeIso } from '../../../common/format-create-time';
 
 export type SystemRoleItem = {
   id: string;
@@ -49,21 +50,6 @@ export type SystemRoleListQuery = {
   endTime?: string;
   status?: string | number;
 };
-
-const createTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
-  timeZone: 'Asia/Shanghai',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hour12: false,
-});
-
-function formatCreateTime(d: Date): string {
-  return createTimeFormatter.format(d);
-}
 
 /** Mock/UI have no role.code; Nest needs unique code for RBAC — slug from name. */
 function slugRoleCode(name: string): string {
@@ -281,7 +267,7 @@ export class SystemRoleService {
       name: row.name,
       code: row.code,
       status: row.status,
-      createTime: formatCreateTime(row.createdAt),
+      createTime: formatCreateTimeIso(row.createdAt),
       permissions: row.menus.map((m) => m.menuId),
     };
     if (row.remark) item.remark = row.remark;

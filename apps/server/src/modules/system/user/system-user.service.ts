@@ -10,6 +10,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { RedisService } from '../../../redis/redis.service';
 import { AuditService } from '../../audit/audit.service';
 import { parseListCreatedAtRange } from '../../../common/parse-list-time-range';
+import { formatCreateTimeIso } from '../../../common/format-create-time';
 
 export type SystemUserItem = {
   id: string;
@@ -70,21 +71,6 @@ export type SystemUserListQuery = {
 };
 
 const USERNAME_MAX = 64;
-
-const createTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
-  timeZone: 'Asia/Shanghai',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hour12: false,
-});
-
-function formatCreateTime(d: Date): string {
-  return createTimeFormatter.format(d);
-}
 
 function parsePage(v: number | string | undefined, fallback: number): number {
   const n = Number.parseInt(String(v ?? fallback), 10);
@@ -396,7 +382,7 @@ export class SystemUserService {
       username: row.username,
       status: row.status,
       gender: row.gender,
-      createTime: formatCreateTime(row.createdAt),
+      createTime: formatCreateTimeIso(row.createdAt),
       roles: row.roles.map((r) => r.roleId),
     };
     if (row.deptId) item.deptId = row.deptId;

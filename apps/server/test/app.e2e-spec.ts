@@ -375,6 +375,8 @@ describe('Auth + Health (e2e)', () => {
       }),
     );
     expect(JSON.stringify(res.body)).not.toMatch(/password/i);
+    // createTime ISO-8601 UTC on role list
+    expect(row.createTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
   });
 
   it('POST /api/system/role without code → auto slug; PUT {status} partial OK', async () => {
@@ -407,6 +409,74 @@ describe('Auth + Health (e2e)', () => {
 
     await request(app.getHttpServer())
       .delete(`/api/system/role/${id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+  });
+
+  it('GET /api/system/user/list → items+total roles[] ISO createTime, no password', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/system/user/list')
+      .query({ page: 1, pageSize: 20 })
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    expect(res.body.code).toBe(0);
+    expect(Array.isArray(res.body.data?.items)).toBe(true);
+    expect(typeof res.body.data.total).toBe('number');
+    expect(res.body.data.items.length).toBeGreaterThan(0);
+    const row = res.body.data.items[0];
+    expect(row).toEqual(
+      expect.objectContaining({
+        id: expect.any(String),
+        name: expect.any(String),
+        username: expect.any(String),
+        status: expect.any(Number),
+        gender: expect.any(Number),
+        createTime: expect.any(String),
+        roles: expect.any(Array),
+      }),
+    );
+    expect(row.createTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    expect(JSON.stringify(res.body)).not.toMatch(/password/i);
+    // playground type historically said permissions; Nest/contract use roles
+    expect(row).not.toHaveProperty('permissions');
+  });
+
+  it('POST /api/system/user without username/password → 400', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/system/user')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ name: 'No Creds', status: 1 })
+      .expect(400);
+    expect(res.body.code).not.toBe(0);
+    expect(JSON.stringify(res.body)).not.toMatch(/passwordHash/i);
+  });
+
+  it('POST /api/system/user with username+password → 200 ISO createTime, no password echo', async () => {
+    const stamp = Date.now().toString(36);
+    const username = `parity_u_${stamp}`;
+    const created = await request(app.getHttpServer())
+      .post('/api/system/user')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        username,
+        password: 'secret12',
+        name: `Parity User ${stamp}`,
+        status: 1,
+        gender: 2,
+        roles: [],
+      })
+      .expect(200);
+    expect(created.body.code).toBe(0);
+    expect(created.body.data?.id).toEqual(expect.any(String));
+    expect(created.body.data?.username).toBe(username);
+    expect(created.body.data?.name).toBe(`Parity User ${stamp}`);
+    expect(created.body.data?.roles).toEqual([]);
+    expect(created.body.data.createTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    expect(JSON.stringify(created.body)).not.toMatch(/password/i);
+
+    const id = created.body.data.id as string;
+    await request(app.getHttpServer())
+      .delete(`/api/system/user/${id}`)
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(200);
   });

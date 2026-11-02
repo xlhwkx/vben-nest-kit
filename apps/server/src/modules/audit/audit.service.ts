@@ -1,7 +1,8 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { Prisma } from "../../generated/prisma/client";
-import { PrismaService } from "../../prisma/prisma.service";
-import { getRequestContext } from "../../common/request-context";
+import { Injectable, Logger } from '@nestjs/common';
+import { formatCreateTimeIso } from '../../common/format-create-time';
+import { Prisma } from '../../generated/prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
+import { getRequestContext } from '../../common/request-context';
 
 export type AuditRecordInput = {
   action: string;
@@ -23,7 +24,7 @@ const SENSITIVE_KEY =
 function sanitizeDetail(
   detail: Record<string, unknown> | null | undefined,
 ): Prisma.InputJsonValue | undefined {
-  if (detail == null) return undefined;
+  if (detail === null || detail === undefined) return undefined;
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(detail)) {
     if (SENSITIVE_KEY.test(key)) continue;
@@ -65,17 +66,6 @@ export type AuditListItem = {
   createTime: string;
 };
 
-const createTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
-  timeZone: "Asia/Shanghai",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-  hour12: false,
-});
-
 @Injectable()
 export class AuditService {
   private readonly logger = new Logger(AuditService.name);
@@ -84,8 +74,8 @@ export class AuditService {
 
   /** Fire-and-forget write; never throws to callers. */
   record(input: AuditRecordInput): void {
-    void this.persist(input).catch((err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err);
+    void this.persist(input).catch((error: unknown) => {
+      const msg = error instanceof Error ? error.message : String(error);
       this.logger.warn(`audit write failed action=${input.action}: ${msg}`);
     });
   }
@@ -106,14 +96,12 @@ export class AuditService {
         userAgent: input.userAgent ?? ctx?.userAgent ?? null,
         requestId: input.requestId ?? ctx?.requestId ?? null,
         status: input.status ?? null,
-        ...(detail !== undefined ? { detail } : {}),
+        ...(detail === undefined ? {} : { detail }),
       },
     });
   }
 
-  async list(
-    query: AuditListQuery,
-  ): Promise<{ items: AuditListItem[]; total: number }> {
+  async list(query: AuditListQuery): Promise<{ items: AuditListItem[]; total: number }> {
     const page = parsePage(query.page, 1);
     let pageSize = parsePage(query.pageSize, 20);
     if (pageSize > 100) pageSize = 100;
@@ -123,19 +111,19 @@ export class AuditService {
     if (query.username?.trim()) {
       where.username = {
         contains: query.username.trim(),
-        mode: "insensitive",
+        mode: 'insensitive',
       };
     }
     if (query.action?.trim()) {
       where.action = {
         contains: query.action.trim(),
-        mode: "insensitive",
+        mode: 'insensitive',
       };
     }
     if (query.module?.trim()) {
       where.module = {
         contains: query.module.trim(),
-        mode: "insensitive",
+        mode: 'insensitive',
       };
     }
     if (query.startTime || query.endTime) {
@@ -153,7 +141,7 @@ export class AuditService {
     const total = await this.prisma.auditLog.count({ where });
     const rows = await this.prisma.auditLog.findMany({
       where,
-      orderBy: [{ createdAt: "desc" }],
+      orderBy: [{ createdAt: 'desc' }],
       skip: (page - 1) * pageSize,
       take: pageSize,
     });
@@ -163,7 +151,7 @@ export class AuditService {
         const item: AuditListItem = {
           id: row.id,
           action: row.action,
-          createTime: createTimeFormatter.format(row.createdAt),
+          createTime: formatCreateTimeIso(row.createdAt),
         };
         if (row.userId) item.userId = row.userId;
         if (row.username) item.username = row.username;
@@ -173,8 +161,8 @@ export class AuditService {
         if (row.ip) item.ip = row.ip;
         if (row.userAgent) item.userAgent = row.userAgent;
         if (row.requestId) item.requestId = row.requestId;
-        if (row.status != null) item.status = row.status;
-        if (row.detail != null) item.detail = row.detail;
+        if (row.status !== null && row.status !== undefined) item.status = row.status;
+        if (row.detail !== null && row.detail !== undefined) item.detail = row.detail;
         return item;
       }),
       total,

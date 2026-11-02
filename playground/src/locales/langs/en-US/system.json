@@ -4,7 +4,6 @@
     "title": "User Management",
     "list": "User List",
     "name": "User",
-    "userName": "User Name",
     "id": "User ID",
     "dept": "Department",
     "gender": "Gender",
@@ -12,7 +11,11 @@
     "remark": "Remark",
     "createTime": "Creation Time",
     "operation": "Operation",
-    "placeholder": "Search Department..."
+    "placeholder": "Search Department...",
+    "username": "Username",
+    "password": "Password",
+    "passwordKeepHint": "Leave blank to keep current password",
+    "userName": "Display Name"
   },
   "dict": {
     "title": "Dictionary",
@@ -35,7 +38,6 @@
     "deleteCascadeTip": "Deleting this dictionary type will also delete all of its data. Continue?",
     "codeFormat": "Code may only contain lowercase letters, numbers, and underscores"
   },
-
   "dept": {
     "name": "Department",
     "title": "Department Management",

@@ -3,13 +3,14 @@ import {
   BadRequestException,
   ConflictException,
   NotFoundException,
-} from "@nestjs/common";
-import { Prisma } from "../../../generated/prisma/client";
-import { PrismaService } from "../../../prisma/prisma.service";
-import { RedisService } from "../../../redis/redis.service";
-import { AuditService } from "../../audit/audit.service";
+} from '@nestjs/common';
+import { Prisma } from '../../../generated/prisma/client';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { RedisService } from '../../../redis/redis.service';
+import { AuditService } from '../../audit/audit.service';
+import { formatCreateTimeIso } from '../../../common/format-create-time';
 
-const DICT_VERSION_KEY = "qingzhan:dict:version";
+const DICT_VERSION_KEY = 'qingzhan:dict:version';
 
 export type DictTypeItem = {
   id: string;
@@ -65,21 +66,6 @@ export type DictDataListQuery = {
   status?: string | number;
 };
 
-const createTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
-  timeZone: "Asia/Shanghai",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-  hour12: false,
-});
-
-function formatCreateTime(d: Date): string {
-  return createTimeFormatter.format(d);
-}
-
 function parsePage(v: number | string | undefined, fallback: number): number {
   const n = Number.parseInt(String(v ?? fallback), 10);
   if (!Number.isFinite(n) || n < 1) return fallback;
@@ -87,9 +73,10 @@ function parsePage(v: number | string | undefined, fallback: number): number {
 }
 
 function asDictValue(v: Prisma.JsonValue): string | number {
-  if (typeof v === "number" || typeof v === "string") return v;
-  if (typeof v === "boolean") return v ? 1 : 0;
-  return String(v);
+  if (typeof v === 'number' || typeof v === 'string') return v;
+  if (typeof v === 'boolean') return v ? 1 : 0;
+  if (v === null) return '';
+  return JSON.stringify(v);
 }
 
 function toTypeItem(row: {
@@ -105,7 +92,7 @@ function toTypeItem(row: {
     name: row.name,
     code: row.code,
     status: row.status,
-    createTime: formatCreateTime(row.createdAt),
+    createTime: formatCreateTimeIso(row.createdAt),
   };
   if (row.remark) item.remark = row.remark;
   return item;
@@ -129,7 +116,7 @@ function toDataItem(row: {
     value: asDictValue(row.value),
     sort: row.sort,
     status: row.status,
-    createTime: formatCreateTime(row.createdAt),
+    createTime: formatCreateTimeIso(row.createdAt),
   };
   if (row.color) item.color = row.color;
   if (row.remark) item.remark = row.remark;
@@ -137,9 +124,7 @@ function toDataItem(row: {
 }
 
 function isP2002(err: unknown): boolean {
-  return (
-    err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002"
-  );
+  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
 }
 
 @Injectable()
@@ -157,16 +142,16 @@ export class SystemDictService {
       return Date.now();
     }
     const raw = await this.redis.get(DICT_VERSION_KEY);
-    const n = Number.parseInt(raw ?? "", 10);
+    const n = Number.parseInt(raw ?? '', 10);
     if (Number.isFinite(n) && n >= 1) return n;
-    await this.redis.set(DICT_VERSION_KEY, "1", 60 * 60 * 24 * 365);
+    await this.redis.set(DICT_VERSION_KEY, '1', 60 * 60 * 24 * 365);
     return 1;
   }
 
   private async bumpVersion(): Promise<void> {
     const next = await this.redis.incr(DICT_VERSION_KEY);
     if (next <= 0) {
-      await this.redis.set(DICT_VERSION_KEY, "1", 60 * 60 * 24 * 365);
+      await this.redis.set(DICT_VERSION_KEY, '1', 60 * 60 * 24 * 365);
     }
   }
 
@@ -175,12 +160,9 @@ export class SystemDictService {
   > {
     const types = await this.prisma.dictType.findMany({
       where: { status: 1 },
-      orderBy: [{ code: "asc" }],
+      orderBy: [{ code: 'asc' }],
     });
-    const result: Record<
-      string,
-      { label: string; value: string | number; color?: string }[]
-    > = {};
+    const result: Record<string, { label: string; value: string | number; color?: string }[]> = {};
     for (const t of types) {
       result[t.code] = await this.getEnabledByCode(t.code);
     }
@@ -193,7 +175,7 @@ export class SystemDictService {
     if (!code?.trim()) return [];
     const rows = await this.prisma.dictItem.findMany({
       where: { dictCode: code.trim(), status: 1 },
-      orderBy: [{ sort: "asc" }, { createdAt: "asc" }],
+      orderBy: [{ sort: 'asc' }, { createdAt: 'asc' }],
     });
     return rows.map((row) => {
       const item: { label: string; value: string | number; color?: string } = {
@@ -205,37 +187,30 @@ export class SystemDictService {
     });
   }
 
-  async listTypes(
-    query: DictTypeListQuery,
-  ): Promise<{ items: DictTypeItem[]; total: number }> {
+  async listTypes(query: DictTypeListQuery): Promise<{ items: DictTypeItem[]; total: number }> {
     const page = parsePage(query.page, 1);
     let pageSize = parsePage(query.pageSize, 20);
     if (pageSize > 100) pageSize = 100;
 
     const where: Prisma.DictTypeWhereInput = {};
     if (query.name?.trim()) {
-      where.name = { contains: query.name.trim(), mode: "insensitive" };
+      where.name = { contains: query.name.trim(), mode: 'insensitive' };
     }
     if (query.code?.trim()) {
-      where.code = { contains: query.code.trim(), mode: "insensitive" };
+      where.code = { contains: query.code.trim(), mode: 'insensitive' };
     }
-    if (
-      query.status === 0 ||
-      query.status === "0" ||
-      query.status === 1 ||
-      query.status === "1"
-    ) {
+    if (query.status === 0 || query.status === '0' || query.status === 1 || query.status === '1') {
       where.status = Number(query.status);
     }
 
     const total = await this.prisma.dictType.count({ where });
     const rows = await this.prisma.dictType.findMany({
       where,
-      orderBy: [{ createdAt: "desc" }, { code: "asc" }],
+      orderBy: [{ createdAt: 'desc' }, { code: 'asc' }],
       skip: (page - 1) * pageSize,
       take: pageSize,
     });
-    return { items: rows.map(toTypeItem), total };
+    return { items: rows.map((row) => toTypeItem(row)), total };
   }
 
   async codeExists(code?: string, id?: string): Promise<boolean> {
@@ -251,11 +226,11 @@ export class SystemDictService {
   async createType(input: DictTypeInput): Promise<DictTypeItem> {
     const name = input.name?.trim();
     const code = input.code?.trim();
-    if (!name) throw new BadRequestException("name is required");
-    if (!code) throw new BadRequestException("code is required");
+    if (!name) throw new BadRequestException('name is required');
+    if (!code) throw new BadRequestException('code is required');
 
     const dup = await this.prisma.dictType.findUnique({ where: { code } });
-    if (dup) throw new ConflictException("Dict code already exists");
+    if (dup) throw new ConflictException('Dict code already exists');
 
     try {
       const row = await this.prisma.dictType.create({
@@ -268,15 +243,15 @@ export class SystemDictService {
       });
       await this.bumpVersion();
       this.audit.record({
-        action: "system.dict.create",
-        module: "system.dict",
+        action: 'system.dict.create',
+        module: 'system.dict',
         status: 200,
-        detail: { kind: "type", id: row.id, code: row.code },
+        detail: { kind: 'type', id: row.id, code: row.code },
       });
       return toTypeItem(row);
-    } catch (err) {
-      if (isP2002(err)) throw new ConflictException("Dict code already exists");
-      throw err;
+    } catch (error) {
+      if (isP2002(error)) throw new ConflictException('Dict code already exists');
+      throw error;
     }
   }
 
@@ -286,15 +261,15 @@ export class SystemDictService {
     const data: Prisma.DictTypeUpdateInput = {};
     if (input.name !== undefined) {
       const name = input.name?.trim();
-      if (!name) throw new BadRequestException("name is required");
+      if (!name) throw new BadRequestException('name is required');
       data.name = name;
     }
     if (input.code !== undefined) {
       const code = input.code?.trim();
-      if (!code) throw new BadRequestException("code is required");
+      if (!code) throw new BadRequestException('code is required');
       if (code !== existing.code) {
         const dup = await this.prisma.dictType.findUnique({ where: { code } });
-        if (dup) throw new ConflictException("Dict code already exists");
+        if (dup) throw new ConflictException('Dict code already exists');
         data.code = code;
       }
     }
@@ -312,15 +287,15 @@ export class SystemDictService {
       });
       await this.bumpVersion();
       this.audit.record({
-        action: "system.dict.update",
-        module: "system.dict",
+        action: 'system.dict.update',
+        module: 'system.dict',
         status: 200,
-        detail: { kind: "type", id: row.id, code: row.code },
+        detail: { kind: 'type', id: row.id, code: row.code },
       });
       return toTypeItem(row);
-    } catch (err) {
-      if (isP2002(err)) throw new ConflictException("Dict code already exists");
-      throw err;
+    } catch (error) {
+      if (isP2002(error)) throw new ConflictException('Dict code already exists');
+      throw error;
     }
   }
 
@@ -329,19 +304,17 @@ export class SystemDictService {
     await this.prisma.dictType.delete({ where: { id } });
     await this.bumpVersion();
     this.audit.record({
-      action: "system.dict.delete",
-      module: "system.dict",
+      action: 'system.dict.delete',
+      module: 'system.dict',
       status: 200,
-      detail: { kind: "type", id },
+      detail: { kind: 'type', id },
     });
     return null;
   }
 
-  async listData(
-    query: DictDataListQuery,
-  ): Promise<{ items: DictDataItem[]; total: number }> {
+  async listData(query: DictDataListQuery): Promise<{ items: DictDataItem[]; total: number }> {
     if (!query.dictCode?.trim()) {
-      throw new BadRequestException("dictCode is required");
+      throw new BadRequestException('dictCode is required');
     }
     const dictCode = query.dictCode.trim();
     const page = parsePage(query.page, 1);
@@ -350,34 +323,29 @@ export class SystemDictService {
 
     const where: Prisma.DictItemWhereInput = { dictCode };
     if (query.label?.trim()) {
-      where.label = { contains: query.label.trim(), mode: "insensitive" };
+      where.label = { contains: query.label.trim(), mode: 'insensitive' };
     }
-    if (
-      query.status === 0 ||
-      query.status === "0" ||
-      query.status === 1 ||
-      query.status === "1"
-    ) {
+    if (query.status === 0 || query.status === '0' || query.status === 1 || query.status === '1') {
       where.status = Number(query.status);
     }
 
     const total = await this.prisma.dictItem.count({ where });
     const rows = await this.prisma.dictItem.findMany({
       where,
-      orderBy: [{ sort: "asc" }, { createdAt: "asc" }],
+      orderBy: [{ sort: 'asc' }, { createdAt: 'asc' }],
       skip: (page - 1) * pageSize,
       take: pageSize,
     });
-    return { items: rows.map(toDataItem), total };
+    return { items: rows.map((row) => toDataItem(row)), total };
   }
 
   async createData(input: DictDataInput): Promise<DictDataItem> {
     const dictCode = input.dictCode?.trim();
     const label = input.label?.trim();
-    if (!dictCode) throw new BadRequestException("dictCode is required");
-    if (!label) throw new BadRequestException("label is required");
+    if (!dictCode) throw new BadRequestException('dictCode is required');
+    if (!label) throw new BadRequestException('label is required');
     if (input.value === undefined || input.value === null) {
-      throw new BadRequestException("value is required");
+      throw new BadRequestException('value is required');
     }
     await this.requireTypeByCode(dictCode);
 
@@ -385,8 +353,8 @@ export class SystemDictService {
       data: {
         dictCode,
         label,
-        value: input.value as Prisma.InputJsonValue,
-        sort: typeof input.sort === "number" ? input.sort : 0,
+        value: input.value,
+        sort: typeof input.sort === 'number' ? input.sort : 0,
         status: input.status === 0 ? 0 : 1,
         color: input.color?.trim() || null,
         remark: input.remark?.trim() || null,
@@ -394,10 +362,10 @@ export class SystemDictService {
     });
     await this.bumpVersion();
     this.audit.record({
-      action: "system.dict.create",
-      module: "system.dict",
+      action: 'system.dict.create',
+      module: 'system.dict',
       status: 200,
-      detail: { kind: "data", id: row.id, dictCode: row.dictCode },
+      detail: { kind: 'data', id: row.id, dictCode: row.dictCode },
     });
     return toDataItem(row);
   }
@@ -408,16 +376,14 @@ export class SystemDictService {
 
     if (input.label !== undefined) {
       const label = input.label?.trim();
-      if (!label) throw new BadRequestException("label is required");
+      if (!label) throw new BadRequestException('label is required');
       data.label = label;
     }
     if (input.value !== undefined && input.value !== null) {
-      data.value = input.value as Prisma.InputJsonValue;
+      data.value = input.value;
     }
     if (input.sort !== undefined) {
-      data.sort = Number.isFinite(Number(input.sort))
-        ? Number(input.sort)
-        : existing.sort;
+      data.sort = Number.isFinite(Number(input.sort)) ? Number(input.sort) : existing.sort;
     }
     if (input.status === 0 || input.status === 1) {
       data.status = input.status;
@@ -435,10 +401,10 @@ export class SystemDictService {
     });
     await this.bumpVersion();
     this.audit.record({
-      action: "system.dict.update",
-      module: "system.dict",
+      action: 'system.dict.update',
+      module: 'system.dict',
       status: 200,
-      detail: { kind: "data", id: row.id, dictCode: row.dictCode },
+      detail: { kind: 'data', id: row.id, dictCode: row.dictCode },
     });
     return toDataItem(row);
   }
@@ -448,29 +414,29 @@ export class SystemDictService {
     await this.prisma.dictItem.delete({ where: { id } });
     await this.bumpVersion();
     this.audit.record({
-      action: "system.dict.delete",
-      module: "system.dict",
+      action: 'system.dict.delete',
+      module: 'system.dict',
       status: 200,
-      detail: { kind: "data", id },
+      detail: { kind: 'data', id },
     });
     return null;
   }
 
   private async requireType(id: string) {
     const row = await this.prisma.dictType.findUnique({ where: { id } });
-    if (!row) throw new NotFoundException("Dict type not found");
+    if (!row) throw new NotFoundException('Dict type not found');
     return row;
   }
 
   private async requireTypeByCode(code: string) {
     const row = await this.prisma.dictType.findUnique({ where: { code } });
-    if (!row) throw new NotFoundException("Dict type not found");
+    if (!row) throw new NotFoundException('Dict type not found');
     return row;
   }
 
   private async requireData(id: string) {
     const row = await this.prisma.dictItem.findUnique({ where: { id } });
-    if (!row) throw new NotFoundException("Dict data not found");
+    if (!row) throw new NotFoundException('Dict data not found');
     return row;
   }
 }

@@ -5,10 +5,17 @@ import { requestClient } from '#/api/request';
 export namespace SystemUserApi {
   export interface SystemUser {
     [key: string]: any;
+    createTime?: string;
     gender?: 0 | 1 | 2;
     id: string;
     name: string;
-    permissions: string[];
+    /** Login account; required on create */
+    username?: string;
+    /**
+     * Bound role ids (Nest `roles`).
+     * Not menu permissions — those live on SystemRole.permissions.
+     */
+    roles?: string[];
     remark?: string;
     status: 0 | 1;
   }
@@ -26,9 +33,14 @@ async function getUserList(params: Recordable<any>) {
 
 /**
  * 创建用户
- * @param data 用户数据
+ * @param data 用户数据（Must 含 username + password + name）
  */
-async function createUser(data: Omit<SystemUserApi.SystemUser, 'id'>) {
+async function createUser(
+  data: Omit<SystemUserApi.SystemUser, 'id'> & {
+    password: string;
+    username: string;
+  },
+) {
   return requestClient.post('/system/user', data);
 }
 
@@ -36,11 +48,11 @@ async function createUser(data: Omit<SystemUserApi.SystemUser, 'id'>) {
  * 更新用户
  *
  * @param id 用户 ID
- * @param data 用户数据
+ * @param data 用户数据（password 可选；空串勿传）
  */
 async function updateUser(
   id: string,
-  data: Omit<SystemUserApi.SystemUser, 'id'>,
+  data: Omit<SystemUserApi.SystemUser, 'id'> & { password?: string },
 ) {
   return requestClient.put(`/system/user/${id}`, data);
 }

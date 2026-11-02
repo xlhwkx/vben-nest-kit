@@ -1,18 +1,11 @@
 <script lang="ts" setup>
-import type { DataNode } from 'antdv-next/dist/tree';
-
-import type { Recordable } from '@vben/types';
-
 import type { SystemUserApi } from '#/api/system/user';
 
 import { computed, nextTick, ref } from 'vue';
 
-import { Tree, useVbenDrawer } from '@vben/common-ui';
-
-import { Spin } from 'antdv-next';
+import { useVbenDrawer } from '@vben/common-ui';
 
 import { useVbenForm } from '#/adapter/form';
-import { getMenuList } from '#/api/system/menu';
 import { createUser, updateUser } from '#/api/system/user';
 import { $t } from '#/locales';
 
@@ -23,21 +16,31 @@ const emits = defineEmits(['success']);
 const formData = ref<SystemUserApi.SystemUser>();
 
 const [Form, formApi] = useVbenForm({
-  schema: useFormSchema(),
+  schema: useFormSchema(false),
   showDefaultActions: false,
 });
 
-const permissions = ref<DataNode[]>([]);
-const loadingPermissions = ref(false);
-
-const id = ref();
+const id = ref<string>();
 const [Drawer, drawerApi] = useVbenDrawer<null | SystemUserApi.SystemUser>({
   async onConfirm() {
     const { valid } = await formApi.validate();
     if (!valid) return;
     const values = await formApi.getValues();
+    // Nest: omit empty password on update (keep hash); never echo password
+    const payload = { ...values } as Record<string, unknown>;
+    if (!payload.password) {
+      delete payload.password;
+    }
     drawerApi.lock();
-    (id.value ? updateUser(id.value, values) : createUser(values))
+    (id.value
+      ? updateUser(id.value, payload as Omit<SystemUserApi.SystemUser, 'id'>)
+      : createUser(
+          payload as Omit<SystemUserApi.SystemUser, 'id'> & {
+            password: string;
+            username: string;
+          },
+        )
+    )
       .then(() => {
         emits('success');
         drawerApi.close();
@@ -55,18 +58,21 @@ const [Drawer, drawerApi] = useVbenDrawer<null | SystemUserApi.SystemUser>({
       if (data) {
         formData.value = data;
         id.value = data.id;
+        formApi.setState({ schema: useFormSchema(true) });
       } else {
         formData.value = undefined;
         id.value = undefined;
+        formApi.setState({ schema: useFormSchema(false) });
       }
 
-      if (permissions.value.length === 0) {
-        await loadPermissions();
-      }
       // Wait for Vue to flush DOM updates (form fields mounted)
       await nextTick();
       if (data) {
-        formApi.setValues(data);
+        // never prefill password
+        const { password: _pw, ...rest } = data as SystemUserApi.SystemUser & {
+          password?: string;
+        };
+        formApi.setValues(rest);
       }
     }
   },
@@ -74,48 +80,14 @@ const [Drawer, drawerApi] = useVbenDrawer<null | SystemUserApi.SystemUser>({
 
 defineExpose({ drawerApi });
 
-async function loadPermissions() {
-  loadingPermissions.value = true;
-  try {
-    const res = await getMenuList();
-    permissions.value = res as unknown as DataNode[];
-  } finally {
-    loadingPermissions.value = false;
-  }
-}
-
 const getDrawerTitle = computed(() => {
   return formData.value?.id
     ? $t('common.edit', $t('system.user.name'))
     : $t('common.create', $t('system.user.name'));
 });
-
-function getNodeClass(node: Recordable<any>) {
-  const classes: string[] = [];
-  if (node.value?.type === 'button') {
-    classes.push('inline-flex');
-  }
-
-  return classes.join(' ');
-}
 </script>
 <template>
   <Drawer :title="getDrawerTitle">
-    <Form>
-      <template #permissions="slotProps">
-        <Spin :spinning="loadingPermissions" :classes="{ root: 'w-full' }">
-          <Tree
-            :tree-data="permissions"
-            multiple
-            bordered
-            :default-expanded-level="2"
-            :get-node-class="getNodeClass"
-            v-bind="slotProps.componentProps"
-            value-field="id"
-            label-field="name"
-          />
-        </Spin>
-      </template>
-    </Form>
+    <Form />
   </Drawer>
 </template>

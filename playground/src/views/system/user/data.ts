@@ -15,13 +15,31 @@ import { $t } from '#/locales';
 
 const USER_GENDER_CODE = 'user_gender';
 
-export function useFormSchema(): VbenFormSchema[] {
+export function useFormSchema(isEdit = false): VbenFormSchema[] {
   const dictStore = useDictStore();
   return [
     {
       component: 'Input',
+      fieldName: 'username',
+      label: $t('system.user.username'),
+      rules: 'required',
+      // Nest username is unique; allow edit but typically stable
+      disabled: isEdit,
+    },
+    {
+      component: 'VbenInputPassword',
+      fieldName: 'password',
+      label: $t('system.user.password'),
+      // create: required (≥6 on Nest); edit: omit empty → Nest keeps hash
+      rules: isEdit ? undefined : 'required',
+      componentProps: {
+        placeholder: isEdit ? $t('system.user.passwordKeepHint') : undefined,
+      },
+    },
+    {
+      component: 'Input',
       fieldName: 'name',
-      label: $t('system.user.name'),
+      label: $t('system.user.userName'),
       rules: 'required',
     },
     {
@@ -124,7 +142,8 @@ export function useDescriptionItems(
   const dictStore = useDictStore();
   const enabled = row?.status === 1;
   return [
-    { label: $t('system.user.name'), content: row?.name },
+    { label: $t('system.user.username'), content: row?.username },
+    { label: $t('system.user.userName'), content: row?.name },
     { label: $t('system.user.id'), content: row?.id },
     { label: $t('system.user.dept'), content: row?.deptId },
     {
@@ -155,9 +174,14 @@ export function useColumns<T = SystemUserApi.SystemUser>(
 ): VxeTableGridColumns {
   return [
     {
+      field: 'username',
+      title: $t('system.user.username'),
+      width: 140,
+    },
+    {
       field: 'name',
-      title: $t('system.user.name'),
-      width: 200,
+      title: $t('system.user.userName'),
+      width: 160,
     },
     {
       field: 'id',

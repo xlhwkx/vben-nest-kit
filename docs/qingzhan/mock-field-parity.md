@@ -3,7 +3,7 @@
 > Sources: `apps/backend-mock/**` + `规则/api-contract-vben.md`
 > Nest: `apps/server/**`
 > Date: 2026-11-02 (Asia/Singapore)
-> This slice fixes: `system/role` partial PUT / optional code; list `endTime` day-bound
+> This slice fixes: system/user create username+password (playground); createTime → ISO-8601 UTC; permissions vs roles
 
 ## Summary
 
@@ -11,11 +11,11 @@
 |------|---------|-------|
 | Envelope / paging | OK | `code/data/error/message`; page `data.items` + `data.total` |
 | Auth P0 | OK | login no password; refresh raw string; logout `data:""`; codes `string[]` |
-| user/info + menu/all | OK | BasicUserInfo required fields; menu tree excludes buttons |
+| user/info + menu/all | OK | BasicUserInfo `roles` (codes); menu tree excludes buttons |
 | dict runtime | OK | `/dict/all|data|version` shapes match mock |
-| system CRUD list | Mostly OK | Nest supersets (`code`/`username`/`roles`) |
+| system CRUD list | OK | Nest supersets (`code`/`username`/`roles`); **createTime ISO** |
 | demo P2 | OK | table/status/timezone/bigint |
-| **Fixed this slice** | role write path | see below |
+| **Fixed this slice** | user write + time + naming | see below |
 | Remaining gaps | last section | next-slice candidates |
 
 ---
@@ -30,23 +30,23 @@
 | `POST /auth/refresh` | raw accessToken string | same + refresh rotation | OK |
 | `POST /auth/logout` | `""` | `""` | OK |
 | `GET /auth/codes` | `string[]` | `string[]` (DB codes) | values differ from mock demos; shape OK |
-| `GET /user/info` | `id,realName,roles,username,homePath` | +`userId,avatar,desc` | matches BasicUserInfo; no password |
+| `GET /user/info` | `id,realName,roles,username,homePath` | +`userId,avatar,desc` | **`roles` = role codes** (contract BasicUserInfo). Not menu permissions. |
 | `GET /menu/all` | RouteRecord tree | DB role menu tree (no button) | shape OK; content follows seed |
 
 ### P1 system admin
 
 | Path | Mock | Nest | Diff / status |
 |------|------|------|---------------|
-| `GET /system/user/list` | items: `id,name,status,gender,createTime,deptId?,remark?` | +`username,roles` (roleId[]) | superset OK; paging OK |
-| `POST/PUT /system/user` | mock middleware 403 | real write; create needs `username+password+name` | **Remaining**: playground form lacks username/password -> create still 400 (frontend) |
-| `PUT /system/user/:id` `{status}` | — | partial update already supported | OK |
-| `GET /system/role/list` | items: `id,name,status,createTime,permissions[],remark?` | +`code`; `permissions`=menu id[] | superset OK |
-| `POST /system/role` | 403 | name required; **code optional** (auto-slug) | **Fixed this slice** |
-| `PUT /system/role/:id` | 403 | **partial update** (incl. `{status}` only) | **Fixed this slice** (UI status toggle was broken) |
-| `GET /system/dept/list` | tree; root `pid:0` | same | OK |
+| `GET /system/user/list` | items: `id,name,status,gender,createTime,deptId?,remark?` | +`username,roles` (roleId[]); **createTime ISO-8601 UTC** | superset OK |
+| `POST /system/user` | mock middleware 403 | Must `username`+`password`+`name` (≥6); response **never** password | **Fixed**: playground form now collects username/password |
+| `PUT /system/user/:id` | 403 | partial; password optional (omit/empty = keep hash) | OK |
+| `GET /system/role/list` | items: `id,name,status,createTime,permissions[],remark?` | +`code`; `permissions`=menu id[]; createTime ISO | OK |
+| `POST /system/role` | 403 | name required; code optional (auto-slug) | OK (prior slice) |
+| `PUT /system/role/:id` | 403 | partial update (incl. `{status}`) | OK (prior slice) |
+| `GET /system/dept/list` | tree; root `pid:0` | same; createTime ISO | OK |
 | `GET /system/menu/list` | admin tree with button/`authCode`/`pid` | same shape (UUID ids) | OK |
-| `GET /system/dict/type|data/list` | `items+total` + createTime | same | OK |
-| list `startTime/endTime` | string compare vs mock createTime | Date filter; **YYYY-MM-DD end includes that UTC day** | **Fixed this slice** (user/role) |
+| `GET /system/dict/type|data/list` | `items+total` + createTime | same; createTime ISO | OK |
+| list `startTime/endTime` | string compare vs mock createTime | Date filter; **YYYY-MM-DD end = UTC day end** | OK (prior); **CST calendar day界 下刀可议** |
 
 ### P1/P2 other
 
@@ -62,9 +62,13 @@
 
 ## Fixed this slice
 
-1. **`PUT /api/system/role/:id`**: all body fields optional (at least one); matches playground `updateRole(id, { status })`.
-2. **`POST /api/system/role`**: `code` optional; slug from `name` when omitted (suffix on conflict).
-3. **`parseListCreatedAtRange`**: user/role list treats `YYYY-MM-DD` `endTime` as `23:59:59.999Z` that day.
+1. **Playground system/user create**: form + API type require `username` + `password` (+ `name`); edit keeps username disabled, empty password omitted.
+2. **`createTime` → ISO-8601 UTC** via shared `formatCreateTimeIso` for user / role / dept / dict / audit (contract §11.6 Should).
+3. **`permissions` vs `roles`**:
+   - `/user/info` + contract: `roles` = **role codes**
+   - `GET/POST /system/user`: Nest `roles` = **role ids**; playground type was wrongly named `permissions` → renamed to `roles`
+   - `system/role`: Nest/playground `permissions` = **menu ids** (unchanged; different domain)
+4. **UTC day-bound note**: list `endTime` date-only still ends at `23:59:59.999Z` (UTC). If RangePicker is Asia/Shanghai calendar, **下刀可议 CST**.
 
 ---
 
@@ -72,10 +76,9 @@
 
 | Priority | Item | Suggestion |
 |----------|------|------------|
-| P1 | system/user **create** missing username/password | add frontend fields; or Nest demo auto-username (needs product call) |
-| P1 | playground SystemUser type says `permissions`; Nest returns `roles` | align frontend type / docs |
-| P2 | `createTime` still zh-CN string | contract Should -> ISO-8601 UTC (or dual fields) |
+| P2 | system/user form role multi-select UI | optional: bind `roles` to role list (API already accepts) |
 | P2 | CI drop `dangerouslyAllowAllBuilds` | whitelist only |
+| P2 | list endTime CST vs UTC | product call if Shanghai RangePicker day mismatch |
 | Later | SliderCaptcha UI E2E, real mail, public repo/Release | wait for user approval |
 
 Repo visibility unchanged; no Release cut.
