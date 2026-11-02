@@ -12,6 +12,8 @@ on:
       - '.env.example'
       - 'pnpm-workspace.yaml'
       - 'pnpm-lock.yaml'
+      - 'package.json'
+      - 'scripts/postinstall-stub.mjs'
       - '.github/workflows/qingzhan-server-e2e.yml'
   pull_request:
     branches: [main]
@@ -22,6 +24,8 @@ on:
       - '.env.example'
       - 'pnpm-workspace.yaml'
       - 'pnpm-lock.yaml'
+      - 'package.json'
+      - 'scripts/postinstall-stub.mjs'
       - '.github/workflows/qingzhan-server-e2e.yml'
 
 permissions:
@@ -121,6 +125,9 @@ jobs:
         # Root lockfile + root pnpm-workspace.yaml allowBuilds (argon2/prisma/...).
         # Do NOT use --ignore-workspace: pnpm 11 then skips allowBuilds and needs
         # --config.dangerouslyAllowAllBuilds=true. Filter keeps install scoped.
+        # Filtered install leaves internal/* without deps — skip root `pnpm -r stub`.
+        env:
+          IGNORE_STUB: "1"
         run: pnpm install --frozen-lockfile --filter @qingzhan/server...
 
       - name: Prisma migrate + seed

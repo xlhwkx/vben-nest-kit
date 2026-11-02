@@ -39,6 +39,7 @@
 - 文档明确 `THROTTLE_STORAGE=memory` 下无登录 Redis fail-closed；`auth:fail` 在 Redis 宕时 fail-open
 - e2e：Redis `eval` 失败时 login → 503（fail-closed）
 - CI：`pnpm/action-setup` 去掉 `version`，改用根 `packageManager`；install 改为根 `--filter @qingzhan/server...` + 根 `allowBuilds`（去掉 `dangerouslyAllowAllBuilds`；`--ignore-workspace` 不会读 allowBuilds）
+- CI：filter install 设 `IGNORE_STUB=1`，根 `postinstall` 经 `scripts/postinstall-stub.mjs` 跳过全仓 stub（避免未装依赖的 internal/* 失败）；仍走根 `allowBuilds`，不用 `dangerouslyAllowAllBuilds`
 - CI：GHA Node **24**（Jest 30 + Nest 12 ESM 需 ≥24.9）
 
 ### Security
