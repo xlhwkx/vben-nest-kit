@@ -71,7 +71,7 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5666}
       THROTTLE_STORAGE: redis
       SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
-      METRICS_ENABLED: ${METRICS_ENABLED:-true}
+      METRICS_ENABLED: ${METRICS_ENABLED:-false}
       METRICS_TOKEN: ${METRICS_TOKEN:-}
       RUN_MIGRATE_ON_START: ${RUN_MIGRATE_ON_START:-true}
       STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
@@ -100,3 +100,4 @@ volumes:
   qingzhan_prod_pg:
   qingzhan_prod_redis:
   qingzhan_prod_uploads:
+

@@ -17,3 +17,10 @@ uploads
 *.log
 playwright-report
 test-results
+
+# never bake secrets into image layers
+.env
+.env*
+**/.env
+**/.env*
+

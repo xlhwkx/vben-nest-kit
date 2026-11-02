@@ -65,6 +65,10 @@ datalog
 # 青栈 / Nest
 .env
 !.env.example
+.env.production
+.env*.production
+**/.env.production
+**/.env*.production
 apps/server/dist
 apps/server/coverage
 *.tsbuildinfo
@@ -94,3 +98,4 @@ uploads/
 
 
 apps/server/.docker-build.log
+
