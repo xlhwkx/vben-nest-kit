@@ -6,6 +6,8 @@
 ## Unreleased
 
 ### Added
+- P2 demo: `GET /api/table/list` (Bearer, items+total) and `GET /api/status` (public error envelope)
+- e2e: `/api/dict/all|data|version` and table/status
 - M4 可选骨架：`StorageProvider`（local 默认 / s3 兼容 MinIO）；`QueueModule` + BullMQ（mail / audit-archive 占位，`QUEUE_ENABLED` 默认关）
 - GitHub Actions：`.github/workflows/qingzhan-server-e2e.yml`（Compose PG16+Redis7、随机 JWT、server-only e2e）
 - `docs/qingzhan/open-source-checklist.md` 开源前检查清单

@@ -16,6 +16,7 @@ import { UserModule } from './modules/user/user.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { QueueModule } from './modules/queue/queue.module';
+import { DemoModule } from './modules/demo/demo.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
 import { RedisService } from './redis/redis.service';
@@ -77,6 +78,7 @@ import { RedisService } from './redis/redis.service';
     SystemModule,
     UploadModule,
     QueueModule,
+    DemoModule,
     AuditModule,
   ],
   providers: [

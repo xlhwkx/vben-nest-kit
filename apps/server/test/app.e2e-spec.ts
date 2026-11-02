@@ -57,10 +57,13 @@ describe('Auth + Health (e2e)', () => {
     }
     try {
       const client = redis.getClient();
-      const keys = await client.keys('auth:fail:*');
-      if (keys.length > 0) await client.del(...keys);
+      const patterns = ['auth:fail:*', 'qz:throttle:*'];
+      for (const pattern of patterns) {
+        const keys = await client.keys(pattern);
+        if (keys.length > 0) await client.del(...keys);
+      }
     } catch {
-      // ignore — suite raises AUTH_FAIL_* high enough
+      // ignore — suite raises AUTH_FAIL_* / THROTTLE_* high enough
     }
   });
 
@@ -298,7 +301,72 @@ describe('Auth + Health (e2e)', () => {
 
     await redis.del(userKey);
   });
+  it('GET /api/table/list with Bearer → items+total', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/table/list')
+      .query({ page: 1, pageSize: 10 })
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    expect(res.body.code).toBe(0);
+    expect(Array.isArray(res.body.data?.items)).toBe(true);
+    expect(res.body.data.items).toHaveLength(10);
+    expect(res.body.data.total).toBe(100);
+    expect(res.body).not.toHaveProperty('password');
+  });
+
+  it('GET /api/table/list without token → 401', async () => {
+    await request(app.getHttpServer()).get('/api/table/list').expect(401);
+  });
+
+  it('GET /api/status?status=500 → 500 error envelope (public)', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/status')
+      .query({ status: 500 })
+      .expect(500);
+    expect(res.body.code).toBe(-1);
+    expect(res.body.data).toBeNull();
+    expect(String(res.body.message)).toContain('500');
+  });
+
+  it('GET /api/dict/all with Bearer → record of enabled items', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/dict/all')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    expect(res.body.code).toBe(0);
+    expect(res.body.data).toEqual(expect.any(Object));
+    expect(res.body.data.user_gender).toEqual(expect.any(Array));
+    expect(res.body.data.user_gender.length).toBeGreaterThan(0);
+    expect(res.body.data.user_gender[0]).toEqual(
+      expect.objectContaining({
+        label: expect.any(String),
+        value: expect.anything(),
+      }),
+    );
+  });
+
+  it('GET /api/dict/data?code=user_gender → enabled items', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/dict/data')
+      .query({ code: 'user_gender' })
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    expect(res.body.code).toBe(0);
+    expect(Array.isArray(res.body.data)).toBe(true);
+    expect(res.body.data.length).toBeGreaterThan(0);
+  });
+
+  it('GET /api/dict/version → number', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/dict/version')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    expect(res.body.code).toBe(0);
+    expect(typeof res.body.data).toBe('number');
+  });
+
 });
+
 
 
 describe('Login throttle fail-closed (e2e)', () => {
