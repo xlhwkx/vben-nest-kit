@@ -95,7 +95,7 @@ export class CaptchaService {
     const token = input.captchaToken?.trim() ?? '';
     if (!id || !token) {
       throw new BadRequestException({
-        message: 'BadRequestException',
+        message: 'Captcha is required',
         error: 'Captcha is required',
       });
     }
@@ -103,7 +103,7 @@ export class CaptchaService {
     // Explicit bypass token is rejected when bypass env is off.
     if (token === CAPTCHA_E2E_BYPASS_TOKEN) {
       throw new BadRequestException({
-        message: 'BadRequestException',
+        message: 'Invalid captcha',
         error: 'Invalid captcha',
       });
     }
@@ -112,14 +112,14 @@ export class CaptchaService {
     const stored = await this.redis.get(key);
     if (!stored) {
       throw new BadRequestException({
-        message: 'BadRequestException',
+        message: 'Invalid or expired captcha',
         error: 'Invalid or expired captcha',
       });
     }
     await this.redis.del(key);
     if (stored !== sha256(token)) {
       throw new BadRequestException({
-        message: 'BadRequestException',
+        message: 'Invalid captcha',
         error: 'Invalid captcha',
       });
     }

@@ -41,8 +41,8 @@ Auth · User · Menu · System（用户/角色/菜单/部门/字典）· Upload 
 - **登录失败锁定**：`auth:fail:user:{username}` + `auth:fail:ip:{ip}`（默认 5 次 / 15min → HTTP 429）；成功登录清零用户名计数；与 IP QPS 限流互补。
 - **审计**：login 成功/失败/锁定、logout、敏感写、upload 等异步 `record`；列表需 `System:Audit:List`；响应头 `x-request-id`。
 - **上传**：`StorageProvider`（local 默认 / s3 可选）+ UUID；MIME 白名单 + **magic-bytes**（`file-type`）；默认无 SVG；`nosniff`；multer 上限对齐 `UPLOAD_MAX_BYTES`。
-- **队列**：`QueueModule` + BullMQ（mail / audit-archive）；默认关闭；`MAIL_DRIVER=console|smtp`（默认 console，smtp 仅 dry-run）。
-- **验证码**：生产 UI 仍用 web-antd **SliderCaptcha**；服务端默认不强制（合同 login 仅用户名密码）。`CAPTCHA_REQUIRED=true` 时 login 须带 `GET /api/auth/captcha` 票据；`CAPTCHA_E2E_BYPASS=1` + 前端 `VITE_CAPTCHA_E2E_BYPASS` 仅测试旁路（禁止生产开启）。
+- **队列**：`QueueModule` + BullMQ（mail / audit-archive）；默认关闭；`MAIL_DRIVER=console|smtp`（默认 console，smtp 仅 dry-run）。实现名 `MailProvider`，技术方案 §26 称 `MailSender`（类型别名已对齐）。
+- **验证码**：生产 UI 仍用 web-antd **SliderCaptcha**；服务端默认不强制（合同 login 仅用户名密码）。`CAPTCHA_REQUIRED=true` 时 login 须带 `GET /api/auth/captcha` 票据；前端设 `VITE_CAPTCHA_REQUIRED=true` 时 `loginApi` 会先拉票再提交 `captchaId`+`captchaToken`。`CAPTCHA_E2E_BYPASS=1` + `VITE_CAPTCHA_E2E_BYPASS` 仅测试旁路（禁止生产开启）。
 
 
 

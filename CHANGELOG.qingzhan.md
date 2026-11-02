@@ -6,8 +6,10 @@
 ## Unreleased
 
 ### Added
+- 开源发版准备：`docs/qingzhan/open-source-checklist.md` 发布态勾选；`release-notes-v0.2.0.md`；`.github/workflows/qingzhan-release.yml`（`workflow_dispatch` + 默认 `if: false`，不改可见性、不真发 Release）
+- web-antd：`VITE_CAPTCHA_REQUIRED` 时 `getCaptchaApi` + login 提交 `captchaId`/`captchaToken`（默认关行为不变）
 - Captcha harness：`GET /api/auth/captcha`；`CAPTCHA_REQUIRED`（默认关，合同兼容）+ `CAPTCHA_E2E_BYPASS`（仅测试）；web-antd `VITE_CAPTCHA_E2E_BYPASS` 隐藏滑块自动过
-- Mail：`MailProvider`（`console` 默认 / `smtp` dry-run 骨架）；BullMQ mail worker 脱敏日志；不连真 SMTP
+- Mail：`MailProvider`（= tech plan `MailSender`；`console` 默认 / `smtp` dry-run）；BullMQ mail worker 脱敏日志；不连真 SMTP
 - `docs/qingzhan/mock-field-parity.md`：backend-mock vs Nest 字段级对账与剩余缺口
 - e2e：`GET /system/role/list` 字段锁；`POST` 无 code 自动 slug + `PUT {status}` 部分更新
 - P2 timezone: `GET/POST /api/timezone/*` (getTimezone Bearer, getTimezoneOptions public, setTimezone whitelist)
@@ -16,11 +18,12 @@
 - e2e: `/api/dict/all|data|version` and table/status
 - M4 可选骨架：`StorageProvider`（local 默认 / s3 兼容 MinIO）；`QueueModule` + BullMQ（mail / audit-archive 占位，`QUEUE_ENABLED` 默认关）
 - GitHub Actions：`.github/workflows/qingzhan-server-e2e.yml`（Compose PG16+Redis7、随机 JWT、server-only e2e）
-- `docs/qingzhan/open-source-checklist.md` 开源前检查清单
+- （清单已升为发布态勾选，见上「开源发版准备」）
 - 登录失败锁定：`auth:fail:user:{username}` + `auth:fail:ip:{ip}`（`AUTH_FAIL_MAX` / `AUTH_FAIL_WINDOW_SEC`，默认 5 次 / 15min）→ HTTP **429**；成功登录清零用户名计数；审计 `auth.login_locked`
 - Upload **magic-bytes**（`file-type`）：真实类型须 ∈ 白名单，伪造 Content-Type → 400；multer `fileSize` 与 `UPLOAD_MAX_BYTES` 对齐
 
 ### Changed
+- Captcha 拒票 `message` 改为可读文案（不再裸 `BadRequestException`）
 - Mock `/api/test` 探活：Nest **不实现**；用 `GET /api/v1/health`（及 live/ready）替代，见 `docs/qingzhan/architecture.md`
 - 登录 throttler Redis storage：**fail-closed**（Redis 不可用 → HTTP **503** `Rate limit unavailable`）；其它路由仍 fail-open + warn
 - Known gaps：补 **SliderCaptcha** 阻碍 headless UI 登录 / 静默 refresh 自动化勾选；划掉本刀已清项

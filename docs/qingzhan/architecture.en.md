@@ -41,8 +41,8 @@ Auth · User · Menu · System (user/role/menu/dept/dict) · Upload · Health ·
 - **Login fail lock**: `auth:fail:user:{username}` + `auth:fail:ip:{ip}` (default 5 / 15min → HTTP 429); successful login clears the username counter; complements IP QPS throttle.
 - **Audit**: async `record` for login success/failure/lock, logout, sensitive writes, upload; list requires `System:Audit:List`; `x-request-id` header.
 - **Upload**: local disk + UUID; MIME allow-list + **magic-bytes** (`file-type`); no SVG by default; `nosniff`; multer limit aligns with `UPLOAD_MAX_BYTES`.
-- **Queue**: optional BullMQ skeleton (`QUEUE_ENABLED` default false); `MAIL_DRIVER=console|smtp` (console default, smtp dry-run)
-- **Captcha**: production UI keeps web-antd **SliderCaptcha**; API does not require captcha by default (contract). `CAPTCHA_REQUIRED=true` enforces `GET /api/auth/captcha` tokens on login; `CAPTCHA_E2E_BYPASS=1` + `VITE_CAPTCHA_E2E_BYPASS` are test-only (never production).
+- **Queue**: optional BullMQ skeleton (`QUEUE_ENABLED` default false); `MAIL_DRIVER=console|smtp` (console default, smtp dry-run). Runtime type `MailProvider` aliases tech-plan §26 `MailSender`.
+- **Captcha**: production UI keeps web-antd **SliderCaptcha**; API does not require captcha by default (contract). `CAPTCHA_REQUIRED=true` enforces tokens from `GET /api/auth/captcha`; frontend `VITE_CAPTCHA_REQUIRED=true` makes `loginApi` fetch and send `captchaId`+`captchaToken`. `CAPTCHA_E2E_BYPASS=1` + `VITE_CAPTCHA_E2E_BYPASS` are test-only (never production).
 
 ## Explicitly not done
 

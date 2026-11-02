@@ -890,6 +890,8 @@ common/config/prisma/redis  ← 基础设施（被依赖）
 
 **选择：定义 `MailSender` 接口；local 用 Ethereal/控制台落盘；生产接 SMTP 或厂商 HTTP API。**
 
+> 实现备注：Nest 侧类型名 **MailProvider**（DI：MAIL_PROVIDER），并导出别名 MailSender / MAIL_SENDER，与本节命名对齐；默认 console sink，smtp 为 dry-run。
+
 | 方案 | 结论 | 原因 |
 |---|---|---|
 | 一期不做重置密码 | 可，但建议接口先留 | 补功能时不改架构 |

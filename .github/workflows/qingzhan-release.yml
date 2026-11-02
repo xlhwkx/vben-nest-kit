@@ -1,0 +1,57 @@
+# Qingzhan Release helper — DRAFT / DISABLED by default.
+# Do NOT enable publish until the repo owner explicitly asks for Public/Release.
+# This workflow never changes repository visibility.
+name: Qingzhan Release (draft)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing or intended tag (e.g. v0.2.0). This draft job does not create tags when disabled.'
+        required: true
+        type: string
+      confirm_publish:
+        description: 'Must stay false until the user explicitly OK Release. true would publish (still gated by job if).'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  # HARD GATE: job never runs until someone edits this file and sets if: true
+  # AFTER the user explicitly approved cutting a Release.
+  draft-notes:
+    name: Echo release notes path (no publish)
+    if: false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show intended tag and notes
+        run: |
+          echo "Intended tag: ${{ inputs.tag }}"
+          echo "confirm_publish: ${{ inputs.confirm_publish }}"
+          echo "Notes: docs/qingzhan/release-notes-v0.2.0.md"
+          echo "Checklist: docs/qingzhan/open-source-checklist.md"
+          echo "This job is disabled (if: false). No gh release create."
+
+  # Example publish job — kept for copy/paste after user OK. Still gated.
+  # publish-release:
+  #   if: false
+  #   needs: draft-notes
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     contents: write
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Create GitHub Release (ONLY after user OK)
+  #       if: ${{ inputs.confirm_publish == true }}
+  #       env:
+  #         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #       run: |
+  #         gh release create "${{ inputs.tag }}" \
+  #           --title "Qingzhan ${{ inputs.tag }}" \
+  #           --notes-file docs/qingzhan/release-notes-v0.2.0.md

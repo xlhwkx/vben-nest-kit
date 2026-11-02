@@ -60,7 +60,12 @@ describe('captchaService', () => {
   it('required on: rejects missing token', async () => {
     await withEnv({ required: true, bypass: false }, async () => {
       const svc = new CaptchaService(mockConfig({}), mockRedis(new Map()));
-      await expect(svc.assertLoginCaptcha({})).rejects.toBeInstanceOf(BadRequestException);
+      await expect(svc.assertLoginCaptcha({})).rejects.toMatchObject({
+        response: {
+          message: 'Captcha is required',
+          error: 'Captcha is required',
+        },
+      });
     });
   });
 

@@ -5,6 +5,9 @@ export namespace AuthApi {
   export interface LoginParams {
     password?: string;
     username?: string;
+    /** Present when VITE_CAPTCHA_REQUIRED / server CAPTCHA_REQUIRED */
+    captchaId?: string;
+    captchaToken?: string;
   }
 
   /** 登录接口返回值 */
@@ -16,6 +19,13 @@ export namespace AuthApi {
     data: string;
     status: number;
   }
+
+  /** GET /auth/captcha — one-time challenge when captcha is required */
+  export interface CaptchaResult {
+    captchaId: string;
+    captchaToken: string;
+    expiresIn?: number;
+  }
 }
 
 /**
@@ -23,6 +33,13 @@ export namespace AuthApi {
  */
 export async function loginApi(data: AuthApi.LoginParams) {
   return requestClient.post<AuthApi.LoginResult>('/auth/login', data);
+}
+
+/**
+ * 拉取一次性验证码票据（CAPTCHA_REQUIRED / VITE_CAPTCHA_REQUIRED 时 login 须携带）
+ */
+export async function getCaptchaApi() {
+  return requestClient.get<AuthApi.CaptchaResult>('/auth/captcha');
 }
 
 /**

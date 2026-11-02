@@ -10,7 +10,13 @@ import { resetAllStores, useAccessStore, useUserStore } from '@vben/stores';
 import { notification } from 'ant-design-vue';
 import { defineStore } from 'pinia';
 
-import { getAccessCodesApi, getUserInfoApi, loginApi, logoutApi } from '#/api';
+import {
+  getAccessCodesApi,
+  getCaptchaApi,
+  getUserInfoApi,
+  loginApi,
+  logoutApi,
+} from '#/api';
 import { $t } from '#/locales';
 
 export const useAuthStore = defineStore('auth', () => {
@@ -33,7 +39,26 @@ export const useAuthStore = defineStore('auth', () => {
     let userInfo: null | UserInfo = null;
     try {
       loginLoading.value = true;
-      const { accessToken } = await loginApi(params);
+      // Default off: contract login is username+password only.
+      // When VITE_CAPTCHA_REQUIRED=true, pull one-time ticket then submit.
+      const captchaRequired =
+        import.meta.env.VITE_CAPTCHA_REQUIRED === 'true' ||
+        import.meta.env.VITE_CAPTCHA_REQUIRED === '1';
+      const loginPayload: {
+        username?: string;
+        password?: string;
+        captchaId?: string;
+        captchaToken?: string;
+      } = {
+        username: params.username,
+        password: params.password,
+      };
+      if (captchaRequired) {
+        const challenge = await getCaptchaApi();
+        loginPayload.captchaId = challenge.captchaId;
+        loginPayload.captchaToken = challenge.captchaToken;
+      }
+      const { accessToken } = await loginApi(loginPayload);
 
       // 如果成功获取到 accessToken
       if (accessToken) {

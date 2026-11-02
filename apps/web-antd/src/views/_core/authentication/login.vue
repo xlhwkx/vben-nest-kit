@@ -14,10 +14,11 @@ defineOptions({ name: 'Login' });
 const authStore = useAuthStore();
 
 /**
- * Headless / Playwright harness only.
- * Set VITE_CAPTCHA_E2E_BYPASS=true in .env.development (never production).
- * When on: captcha field auto-passes and SliderCaptcha is hidden.
- * Pair with server CAPTCHA_E2E_BYPASS=1 if CAPTCHA_REQUIRED=true.
+ * Captcha UI + ticket wiring (default off for contract-compatible login).
+ * - VITE_CAPTCHA_REQUIRED=true → authStore fetches GET /auth/captcha and
+ *   submits captchaId+captchaToken (pair with server CAPTCHA_REQUIRED=true).
+ * - VITE_CAPTCHA_E2E_BYPASS=true → hide SliderCaptcha / auto-pass UI field
+ *   (headless only; pair with server CAPTCHA_E2E_BYPASS=1; never production).
  */
 const captchaE2eBypass =
   import.meta.env.VITE_CAPTCHA_E2E_BYPASS === 'true' ||
