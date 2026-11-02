@@ -60,7 +60,9 @@ pnpm test:e2e
 
 ### 前端联调（web-antd）
 
-已配置 `VITE_NITRO_MOCK=false`、`accessMode: 'backend'`、proxy → Nest。改 preferences 后清 localStorage。步骤见根 `README.md`「前端联调」。
+已配置 `VITE_NITRO_MOCK=false`、`accessMode: 'backend'`、proxy → Nest。改 preferences 后清 localStorage。
+
+**干净机器必走根目录 `pnpm install`**（含 postinstall stub）。仅装 `apps/server` 无法跑 `pnpm dev:antd`。若 `@vben/vite-config` 解析失败，检查 `internal/vite-config/dist/index.mjs`，缺失则执行 `pnpm -r run --if-present stub` 后再 `pnpm dev:antd`（默认 http://localhost:5666）。步骤细节见根 `README.md`「前端联调」。
 
 ## 安全与卫生
 

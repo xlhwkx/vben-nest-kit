@@ -60,7 +60,9 @@ Requires Compose + `.env` + seed. Node engines: `^22.18 || ^24.12` (tests use `-
 
 ### Frontend wiring (web-antd)
 
-Repo already sets `VITE_NITRO_MOCK=false`, `accessMode: 'backend'`, and proxy to Nest. Clear localStorage after preference changes. Steps: root `README.md` (frontend section).
+Repo already sets `VITE_NITRO_MOCK=false`, `accessMode: 'backend'`, and proxy to Nest. Clear localStorage after preference changes.
+
+**Clean machines must run root `pnpm install`** (including the postinstall stub). Installing only `apps/server` is not enough for `pnpm dev:antd`. If `@vben/vite-config` fails to resolve, check `internal/vite-config/dist/index.mjs` and run `pnpm -r run --if-present stub`, then `pnpm dev:antd` (http://localhost:5666). Details: root `README.md` (frontend section).
 
 ## Safety
 

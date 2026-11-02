@@ -136,19 +136,25 @@ cd apps/server && pnpm test:e2e
 
 > **改 preferences 后务必清浏览器站点数据 / localStorage**（Vben 会持久化偏好，否则仍可能是 `frontend`）。
 
-### 启动
+### 启动（干净机器）
+
+**web-antd 联调必须走根目录完整安装**（仅 `apps/server` 的 `--ignore-workspace` fallback 不够——前端依赖 `@vben/vite-config` 等 workspace 包，且 `postinstall` 会 `stub` 出 `internal/vite-config/dist`）。
 
 ```bash
 # 终端 1：基础设施 + Nest（若尚未在跑）
 cp .env.example .env          # 首次
 docker compose up -d
-cd apps/server && pnpm start:dev   # 或根目录 pnpm --filter @qingzhan/server start:dev
+pnpm --filter @qingzhan/server start:dev
 # Nest: http://localhost:5320
 
-# 终端 2：前端
-pnpm install                  # 首次 / 依赖变更后
+# 终端 2：前端（仓库根）
+pnpm install                  # 须跑完 postinstall stub（约数分钟）
+# 若仍报 Cannot find module '@vben/vite-config' / 缺 dist：
+#   pnpm -r run --if-present stub
 pnpm dev:antd                 # → http://localhost:5666
 ```
+
+**排障：** `apps/web-antd` 无 `node_modules`、或 `internal/vite-config/dist/index.mjs` 不存在 → 根目录重跑 `pnpm install`（勿只装 server）。Node `^22.18 || ^24.12`，包管理器 **pnpm**（见根 `packageManager`）。
 
 Demo 账号（密码均为 `123456`）：`vben`（super）/ `admin` / `jack`（user）。
 
