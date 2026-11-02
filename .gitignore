@@ -82,3 +82,4 @@ apps/server/.env
 apps/server/src/generated/
 apps/server/_smoke*
 
+apps/server/_auth*
