@@ -5,13 +5,13 @@
 
 ## [0.1.0] — 2026-11-02
 
-HEAD（草稿基线）：`3f08a05`（文档刀通过后；本 Release 草稿提交会再前进一格）。  
+HEAD：以 `v0.1.0` tag 所指 commit 为准。  
 包版本：`apps/server` / `@qingzhan/server` = `0.1.0`。根 monorepo 仍为上游 `5.7.0`，未 bump。
 
 ### Added
 
 - NestJS 12 + Express 后端骨架 `apps/server`（`@qingzhan/server`），Prisma 7 + PostgreSQL、Redis、Docker Compose
-- Auth P0：`login` / `refresh` / `logout` / `codes`；JWT Bearer + HttpOnly Cookie `jwt`；Argon2id；Prisma seed（vben / jack）
+- Auth P0：`login` / `refresh` / `logout` / `codes`；JWT Bearer + HttpOnly Cookie `jwt`；Argon2id；Prisma seed（**vben / admin / jack**，密码 `123456`）
 - `GET /user/info`、`GET /menu/all`（按角色树）
 - System 管理端：用户 / 角色 / 菜单 / 部门 / 字典 CRUD（含 RoleMenu、UserRole、软删 tombstone）
 - 本地 Upload：`POST /upload`、静态 `/uploads`、MIME 白名单、UUID 文件名
@@ -60,5 +60,6 @@ HEAD（草稿基线）：`3f08a05`（文档刀通过后；本 Release 草稿提�
 
 ### Notes
 
-- **尚未打 git tag，也未执行 `gh release create`。** 本文件与 `docs/qingzhan/release-notes-v0.1.md` 为草稿，等维护者确认后再发版。
+- 已打 annotated tag **`v0.1.0`**；仓库当前为 **private**，**暂不创建 GitHub Release**（需要对外链接时再补）。
 - 真源仍是 `规则/vben-nestjs-backend-tech-plan.md` 与 `规则/api-contract-vben.md`。
+
