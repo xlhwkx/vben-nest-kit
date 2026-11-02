@@ -67,10 +67,11 @@ jobs:
         with:
           run_install: false
 
-      - name: Setup Node 22
+      - name: Setup Node 24
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          # Nest 12 ships ESM; Jest 30 needs Node >=24.9 for require(esm)
+          node-version: "24"
 
       - name: Random JWT secrets (never commit)
         shell: bash

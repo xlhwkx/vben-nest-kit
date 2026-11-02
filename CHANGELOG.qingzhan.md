@@ -21,6 +21,7 @@
 - 文档明确 `THROTTLE_STORAGE=memory` 下无登录 Redis fail-closed；`auth:fail` 在 Redis 宕时 fail-open
 - e2e：Redis `eval` 失败时 login → 503（fail-closed）
 - CI：`pnpm/action-setup` 去掉 `version`，改用根 `packageManager`；`apps/server/pnpm-workspace.yaml` `allowBuilds` + install `--config.dangerouslyAllowAllBuilds=true`（pnpm 11 / `--ignore-workspace`）
+- CI：GHA Node **24**（Jest 30 + Nest 12 ESM 需 ≥24.9）
 
 ### Security
 - 凭证爆破：失败计数锁定与 IP QPS 限流互补
