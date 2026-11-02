@@ -1,7 +1,8 @@
 /**
  * Parse list startTime/endTime from playground date-range-codec (YYYY-MM-DD)
- * or full ISO/datetime strings. Date-only endTime is inclusive through end of
- * that UTC calendar day so RangePicker day filters are not cut at 00:00:00.
+ * or full ISO/datetime strings. Date-only bounds use **Asia/Shanghai** calendar
+ * days (UTC+8, no DST) so RangePicker Shanghai day filters match Nest filtering.
+ * endTime date-only is inclusive through 23:59:59.999 in Shanghai.
  */
 export function parseListCreatedAtRange(
   startTime?: string,
@@ -9,16 +10,22 @@ export function parseListCreatedAtRange(
 ): { gte?: Date; lte?: Date } | undefined {
   const out: { gte?: Date; lte?: Date } = {};
   const dateOnly = /^\d{4}-\d{2}-\d{2}$/;
+  // Asia/Shanghai has no DST; fixed +08:00 is the calendar-day contract.
+  const SHANGHAI_OFFSET = '+08:00';
 
   if (startTime?.trim()) {
     const raw = startTime.trim();
-    const t = dateOnly.test(raw) ? new Date(`${raw}T00:00:00.000Z`) : new Date(raw);
+    const t = dateOnly.test(raw)
+      ? new Date(`${raw}T00:00:00.000${SHANGHAI_OFFSET}`)
+      : new Date(raw);
     if (!Number.isNaN(t.getTime())) out.gte = t;
   }
 
   if (endTime?.trim()) {
     const raw = endTime.trim();
-    const t = dateOnly.test(raw) ? new Date(`${raw}T23:59:59.999Z`) : new Date(raw);
+    const t = dateOnly.test(raw)
+      ? new Date(`${raw}T23:59:59.999${SHANGHAI_OFFSET}`)
+      : new Date(raw);
     if (!Number.isNaN(t.getTime())) out.lte = t;
   }
 

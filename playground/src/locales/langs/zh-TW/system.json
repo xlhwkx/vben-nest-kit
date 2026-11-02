@@ -15,7 +15,9 @@
     "username": "登入名",
     "password": "密碼",
     "passwordKeepHint": "留空則不修改密碼",
-    "userName": "使用者名稱"
+    "userName": "使用者名稱",
+    "roles": "角色",
+    "passwordMin": "密碼至少 6 位"
   },
   "dict": {
     "title": "字典管理",

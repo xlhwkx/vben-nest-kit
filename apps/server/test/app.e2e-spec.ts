@@ -481,6 +481,109 @@ describe('Auth + Health (e2e)', () => {
       .expect(200);
   });
 
+  it('POST /api/system/user password shorter than 6 → 400', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/system/user')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        username: `short_pw_${Date.now().toString(36)}`,
+        password: '12345',
+        name: 'Short Password',
+        status: 1,
+      })
+      .expect(400);
+    expect(res.body.code).not.toBe(0);
+    expect(JSON.stringify(res.body)).not.toMatch(/passwordHash/i);
+  });
+
+  it('GET /api/system/user/list YYYY-MM-DD range uses Asia/Shanghai day bounds', async () => {
+    const stamp = Date.now().toString(36);
+    const username = `cst_u_${stamp}`;
+    const created = await request(app.getHttpServer())
+      .post('/api/system/user')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        username,
+        password: 'secret12',
+        name: `CST User ${stamp}`,
+        status: 1,
+        gender: 2,
+        roles: [],
+      })
+      .expect(200);
+    const id = created.body.data.id as string;
+    const createTime = created.body.data.createTime as string;
+    const shanghaiDay = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Shanghai',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date(createTime));
+
+    const hit = await request(app.getHttpServer())
+      .get('/api/system/user/list')
+      .query({
+        page: 1,
+        pageSize: 50,
+        startTime: shanghaiDay,
+        endTime: shanghaiDay,
+      })
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    expect(hit.body.code).toBe(0);
+    expect(hit.body.data.items.some((u: { id: string }) => u.id === id)).toBe(true);
+
+    const miss = await request(app.getHttpServer())
+      .get('/api/system/user/list')
+      .query({
+        page: 1,
+        pageSize: 50,
+        startTime: '2000-01-01',
+        endTime: '2000-01-01',
+      })
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    expect(miss.body.data.items.some((u: { id: string }) => u.id === id)).toBe(false);
+
+    await request(app.getHttpServer())
+      .delete(`/api/system/user/${id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+  });
+
+  it('POST /api/system/user with roles[] binds role ids', async () => {
+    const rolesRes = await request(app.getHttpServer())
+      .get('/api/system/role/list')
+      .query({ page: 1, pageSize: 5 })
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    const roleId = rolesRes.body.data?.items?.[0]?.id as string | undefined;
+    expect(roleId).toEqual(expect.any(String));
+
+    const stamp = Date.now().toString(36);
+    const username = `rolebind_${stamp}`;
+    const created = await request(app.getHttpServer())
+      .post('/api/system/user')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        username,
+        password: 'secret12',
+        name: `Role Bind ${stamp}`,
+        status: 1,
+        roles: [roleId],
+      })
+      .expect(200);
+    expect(created.body.code).toBe(0);
+    expect(created.body.data.roles).toEqual([roleId]);
+    expect(JSON.stringify(created.body)).not.toMatch(/password/i);
+
+    const id = created.body.data.id as string;
+    await request(app.getHttpServer())
+      .delete(`/api/system/user/${id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+  });
+
   it('GET /api/timezone/getTimezoneOptions → public label/value[]', async () => {
     const res = await request(app.getHttpServer())
       .get('/api/timezone/getTimezoneOptions')

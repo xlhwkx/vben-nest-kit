@@ -3,7 +3,7 @@
 > Sources: `apps/backend-mock/**` + `规则/api-contract-vben.md`
 > Nest: `apps/server/**`
 > Date: 2026-11-02 (Asia/Singapore)
-> This slice fixes: system/user create username+password (playground); createTime → ISO-8601 UTC; permissions vs roles
+> This slice fixes: CST Asia/Shanghai list day-bound; playground user roles multi-select; create password >=6 UI
 
 ## Summary
 
@@ -16,7 +16,7 @@
 | system CRUD list | OK | Nest supersets (`code`/`username`/`roles`); **createTime ISO** |
 | demo P2 | OK | table/status/timezone/bigint |
 | **Fixed this slice** | user write + time + naming | see below |
-| Remaining gaps | last section | next-slice candidates |
+| Remaining gaps | last section | CI builds / captcha / mail / public |
 
 ---
 
@@ -46,7 +46,7 @@
 | `GET /system/dept/list` | tree; root `pid:0` | same; createTime ISO | OK |
 | `GET /system/menu/list` | admin tree with button/`authCode`/`pid` | same shape (UUID ids) | OK |
 | `GET /system/dict/type|data/list` | `items+total` + createTime | same; createTime ISO | OK |
-| list `startTime/endTime` | string compare vs mock createTime | Date filter; **YYYY-MM-DD end = UTC day end** | OK (prior); **CST calendar day界 下刀可议** |
+| list `startTime/endTime` | string compare vs mock createTime | Date filter; **YYYY-MM-DD = Asia/Shanghai day** (start 00:00 / end 23:59:59.999 +08) | **Fixed** |
 
 ### P1/P2 other
 
@@ -62,13 +62,10 @@
 
 ## Fixed this slice
 
-1. **Playground system/user create**: form + API type require `username` + `password` (+ `name`); edit keeps username disabled, empty password omitted.
-2. **`createTime` → ISO-8601 UTC** via shared `formatCreateTimeIso` for user / role / dept / dict / audit (contract §11.6 Should).
-3. **`permissions` vs `roles`**:
-   - `/user/info` + contract: `roles` = **role codes**
-   - `GET/POST /system/user`: Nest `roles` = **role ids**; playground type was wrongly named `permissions` → renamed to `roles`
-   - `system/role`: Nest/playground `permissions` = **menu ids** (unchanged; different domain)
-4. **UTC day-bound note**: list `endTime` date-only still ends at `23:59:59.999Z` (UTC). If RangePicker is Asia/Shanghai calendar, **下刀可议 CST**.
+1. **List day-bound → Asia/Shanghai**: `YYYY-MM-DD` `startTime`/`endTime` map to Shanghai calendar day start/end (`+08:00`), matching RangePicker. Full ISO strings still pass through.
+2. **Playground system/user roles multi-select**: form `ApiSelect` `mode: multiple` loads `/system/role/list` (`resultField: items`) and posts `roles: string[]` (role ids) to Nest.
+3. **Create/edit password ≥6**: playground zod `min(6)` (+ edit refine); Nest zod/service already enforced.
+4. Prior slice still holds: username+password create, ISO `createTime`, `roles` vs `permissions` naming.
 
 ---
 
@@ -76,9 +73,7 @@
 
 | Priority | Item | Suggestion |
 |----------|------|------------|
-| P2 | system/user form role multi-select UI | optional: bind `roles` to role list (API already accepts) |
 | P2 | CI drop `dangerouslyAllowAllBuilds` | whitelist only |
-| P2 | list endTime CST vs UTC | product call if Shanghai RangePicker day mismatch |
 | Later | SliderCaptcha UI E2E, real mail, public repo/Release | wait for user approval |
 
 Repo visibility unchanged; no Release cut.

@@ -15,7 +15,9 @@
     "username": "Username",
     "password": "Password",
     "passwordKeepHint": "Leave blank to keep current password",
-    "userName": "Display Name"
+    "userName": "Display Name",
+    "roles": "Roles",
+    "passwordMin": "Password must be at least 6 characters"
   },
   "dict": {
     "title": "Dictionary",

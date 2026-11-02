@@ -10,7 +10,8 @@ import { useDictStore } from '@vben/stores';
 
 import { Tag } from 'antdv-next';
 
-import { getDeptList } from '#/api';
+import { z } from '#/adapter/form';
+import { getDeptList, getRoleList } from '#/api';
 import { $t } from '#/locales';
 
 const USER_GENDER_CODE = 'user_gender';
@@ -30,8 +31,15 @@ export function useFormSchema(isEdit = false): VbenFormSchema[] {
       component: 'VbenInputPassword',
       fieldName: 'password',
       label: $t('system.user.password'),
-      // create: required (≥6 on Nest); edit: omit empty → Nest keeps hash
-      rules: isEdit ? undefined : 'required',
+      // create: required >=6; edit: empty keeps hash; non-empty must >=6
+      rules: isEdit
+        ? z
+            .string()
+            .optional()
+            .refine((v) => !v || v.length >= 6, {
+              message: $t('system.user.passwordMin'),
+            })
+        : z.string().min(6, { message: $t('system.user.passwordMin') }),
       componentProps: {
         placeholder: isEdit ? $t('system.user.passwordKeepHint') : undefined,
       },
@@ -56,6 +64,21 @@ export function useFormSchema(isEdit = false): VbenFormSchema[] {
       label: $t('system.user.dept'),
       rules: 'required',
     },
+    {
+      component: 'ApiSelect',
+      componentProps: {
+        allowClear: true,
+        api: () => getRoleList({ page: 1, pageSize: 200 }),
+        class: 'w-full',
+        labelField: 'name',
+        mode: 'multiple',
+        resultField: 'items',
+        valueField: 'id',
+      },
+      fieldName: 'roles',
+      label: $t('system.user.roles'),
+    },
+
     {
       component: 'RadioGroup',
       componentProps: () => ({
@@ -147,6 +170,10 @@ export function useDescriptionItems(
     { label: $t('system.user.id'), content: row?.id },
     { label: $t('system.user.dept'), content: row?.deptId },
     {
+      label: $t('system.user.roles'),
+      content: row?.roles?.join(', '),
+    },
+    {
       label: $t('system.user.gender'),
       content: dictStore.getDictLabel(USER_GENDER_CODE, row?.gender),
     },
@@ -182,6 +209,13 @@ export function useColumns<T = SystemUserApi.SystemUser>(
       field: 'name',
       title: $t('system.user.userName'),
       width: 160,
+    },
+    {
+      field: 'roles',
+      formatter: ({ cellValue }) =>
+        Array.isArray(cellValue) ? cellValue.join(', ') : (cellValue ?? ''),
+      minWidth: 140,
+      title: $t('system.user.roles'),
     },
     {
       field: 'id',

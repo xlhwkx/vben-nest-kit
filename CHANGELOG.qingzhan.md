@@ -24,6 +24,9 @@
 - Known gaps：补 **SliderCaptcha** 阻碍 headless UI 登录 / 静默 refresh 自动化勾选；划掉本刀已清项
 
 ### Fixed
+- list `startTime`/`endTime` date-only → **Asia/Shanghai** calendar day (was UTC day end)
+- playground system/user：角色多选绑定 `roles`；创建/编辑密码前端 ≥6
+
 - server tsconfig: drop unused `baseUrl`; test `moduleResolution` -> `nodenext` (oxlint type-aware)
 - system/role：PUT 支持部分更新（playground 状态开关只传 `{status}`）；POST `code` 可选自动 slug
 - system user/role list：`YYYY-MM-DD` `endTime` 含当日 UTC 末（RangePicker 日界）
