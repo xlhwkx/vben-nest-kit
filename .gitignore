@@ -85,3 +85,5 @@ apps/server/_smoke*
 apps/server/_auth*
 
 apps/server/_menu*
+
+apps/server/_sysmenu*

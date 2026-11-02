@@ -8,6 +8,7 @@ import { ResponseInterceptor } from "./common/interceptors/response.interceptor"
 import { AuthModule } from "./modules/auth/auth.module";
 import { HealthModule } from "./modules/health/health.module";
 import { MenuModule } from "./modules/menu/menu.module";
+import { SystemModule } from "./modules/system/system.module";
 import { UserModule } from "./modules/user/user.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { RedisModule } from "./redis/redis.module";
@@ -25,6 +26,7 @@ import { RedisModule } from "./redis/redis.module";
     AuthModule,
     UserModule,
     MenuModule,
+    SystemModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
@@ -36,3 +38,4 @@ import { RedisModule } from "./redis/redis.module";
   ],
 })
 export class AppModule {}
+
