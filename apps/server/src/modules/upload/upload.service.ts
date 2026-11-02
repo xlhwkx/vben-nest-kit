@@ -11,12 +11,12 @@ import { promises as fs } from "node:fs";
 import * as path from "node:path";
 import type { Express } from "express";
 
+// SVG (image/svg+xml) omitted by default (XSS); allow via UPLOAD_ALLOWED_MIME.
 const DEFAULT_ALLOWED = new Set([
   "image/jpeg",
   "image/png",
   "image/gif",
   "image/webp",
-  "image/svg+xml",
   "application/pdf",
   "text/plain",
   "application/msword",

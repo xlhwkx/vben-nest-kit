@@ -38,6 +38,12 @@ async function bootstrap() {
   ).replace(/\/$/, "");
   app.useStaticAssets(uploadDir, {
     prefix: `${uploadPublicPath}/`,
+    setHeaders: (res, filePath) => {
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      if (path.extname(filePath).toLowerCase() === ".svg") {
+        res.setHeader("Content-Disposition", "attachment");
+      }
+    },
   });
 
   // Vben 兼容别名：/api/* ；正式版本：/api/v1/*
