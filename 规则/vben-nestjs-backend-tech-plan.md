@@ -841,6 +841,8 @@ common/config/prisma/redis  ← 基础设施（被依赖）
 
 **选择：预留 OpenTelemetry 插桩；v0.1 可只做日志 + `/health`，v0.2 打开 OTLP 导出。**
 
+> 实现进度：`docs/qingzhan/observability.md` — `x-request-id` 结构化日志、`GET /api/health/metrics`（Prometheus）、OTel 默认关（console/otlp 开关）；`auth:fail` 与登录限流 Redis 不可用时 fail-closed（503）。
+
 | 方案 | 结论 | 原因 |
 |---|---|---|
 | 只靠 console.log | 禁止 | 无法关联一次请求 |

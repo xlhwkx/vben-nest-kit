@@ -3,6 +3,8 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
+  Logger,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
@@ -13,6 +15,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import type { LoginDto } from './dto/login.dto';
 import { AuditService } from '../audit/audit.service';
+import { getRequestContext } from '../../common/request-context';
+import { MetricsService } from '../../observability/metrics.service';
 
 const REFRESH_COOKIE = 'jwt';
 const CODES_CACHE_TTL = 60;
@@ -22,8 +26,13 @@ function parseTtlToSeconds(ttl: string, fallback: number): number {
   if (!m) return fallback;
   const n = Number(m[1]);
   const unit = m[2].toLowerCase();
-  const mult =
-    unit === 's' ? 1 : unit === 'm' ? 60 : unit === 'h' ? 3600 : 86_400;
+  const UNIT_SECONDS: Record<string, number> = {
+    s: 1,
+    m: 60,
+    h: 3600,
+    d: 86_400,
+  };
+  const mult = UNIT_SECONDS[unit] ?? 86_400;
   return n * mult;
 }
 
@@ -33,21 +42,21 @@ function sha256(input: string): string {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly redis: RedisService,
     private readonly audit: AuditService,
+    private readonly metrics: MetricsService,
   ) {}
 
   private cookieOptions() {
     const secure = this.config.get<boolean>('COOKIE_SECURE') ?? false;
     const sameSite =
-      (this.config.get<string>('COOKIE_SAME_SITE') as
-        | 'lax'
-        | 'strict'
-        | 'none') ?? 'lax';
+      (this.config.get<string>('COOKIE_SAME_SITE') as 'lax' | 'strict' | 'none') ?? 'lax';
     const refreshTtl = this.config.get<string>('JWT_REFRESH_TTL') ?? '7d';
     const maxAgeSec = parseTtlToSeconds(refreshTtl, 7 * 86_400);
     return {
@@ -79,17 +88,13 @@ export class AuthService {
 
   private failUserMax(): number {
     return (
-      this.config.get<number>('AUTH_FAIL_USER_MAX') ??
-      this.config.get<number>('AUTH_FAIL_MAX') ??
-      5
+      this.config.get<number>('AUTH_FAIL_USER_MAX') ?? this.config.get<number>('AUTH_FAIL_MAX') ?? 5
     );
   }
 
   private failIpMax(): number {
     return (
-      this.config.get<number>('AUTH_FAIL_IP_MAX') ??
-      this.config.get<number>('AUTH_FAIL_MAX') ??
-      5
+      this.config.get<number>('AUTH_FAIL_IP_MAX') ?? this.config.get<number>('AUTH_FAIL_MAX') ?? 5
     );
   }
 
@@ -103,22 +108,49 @@ export class AuthService {
   }
 
   private async readFailCount(key: string): Promise<number> {
-    const raw = await this.redis.get(key);
+    const raw = await this.redis.getStrict(key);
     if (!raw) return 0;
     const n = Number(raw);
     return Number.isFinite(n) ? n : 0;
   }
 
+  private throwLockUnavailable(cause: unknown): never {
+    const requestId = getRequestContext()?.requestId;
+    this.logger.warn(
+      JSON.stringify({
+        msg: 'auth.lock_unavailable',
+        code: 'AUTH_LOCK_UNAVAILABLE',
+        requestId: requestId ?? null,
+        err: String(cause),
+      }),
+    );
+    this.metrics.incLoginFailClosed();
+    this.audit.record({
+      action: 'auth.lock_unavailable',
+      module: 'auth',
+      status: 503,
+      detail: { reason: 'redis_unavailable' },
+    });
+    throw new ServiceUnavailableException({
+      message: 'Login lock unavailable',
+      error: 'Service Unavailable',
+    });
+  }
+
   /**
-   * Reject with HTTP 429 when username or IP failure count ≥ threshold.
-   * Redis down → skip lock check (throttler login path is separately fail-closed).
+   * Reject with HTTP 429 when username or IP failure count >= threshold.
+   * Redis down → fail-closed HTTP 503 (same posture as login throttler).
    */
-  private async assertNotLocked(
-    username: string,
-    ip: string | undefined,
-  ): Promise<void> {
-    const userCount = await this.readFailCount(this.userFailKey(username));
-    const ipCount = ip ? await this.readFailCount(this.ipFailKey(ip)) : 0;
+  private async assertNotLocked(username: string, ip: string | undefined): Promise<void> {
+    let userCount: number;
+    let ipCount: number;
+    try {
+      userCount = await this.readFailCount(this.userFailKey(username));
+      ipCount = ip ? await this.readFailCount(this.ipFailKey(ip)) : 0;
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      this.throwLockUnavailable(error);
+    }
     if (userCount >= this.failUserMax() || ipCount >= this.failIpMax()) {
       this.audit.record({
         action: 'auth.login_locked',
@@ -131,6 +163,7 @@ export class AuthService {
           ipCount: ip ? ipCount : undefined,
         },
       });
+      this.metrics.incLoginLocked();
       this.throwLocked();
     }
   }
@@ -145,14 +178,16 @@ export class AuthService {
     );
   }
 
-  private async recordLoginFailure(
-    username: string,
-    ip: string | undefined,
-  ): Promise<void> {
+  private async recordLoginFailure(username: string, ip: string | undefined): Promise<void> {
     const window = this.failWindowSec();
-    await this.redis.incrWithTtl(this.userFailKey(username), window);
-    if (ip) {
-      await this.redis.incrWithTtl(this.ipFailKey(ip), window);
+    try {
+      await this.redis.incrWithTtlStrict(this.userFailKey(username), window);
+      if (ip) {
+        await this.redis.incrWithTtlStrict(this.ipFailKey(ip), window);
+      }
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      this.throwLockUnavailable(error);
     }
   }
 
@@ -179,9 +214,7 @@ export class AuthService {
     );
   }
 
-  private async issueRefresh(
-    userId: string,
-  ): Promise<{ token: string; jti: string }> {
+  private async issueRefresh(userId: string): Promise<{ token: string; jti: string }> {
     const jti = randomUUID().replaceAll('-', '');
     const refreshTtl = this.config.get<string>('JWT_REFRESH_TTL') ?? '7d';
     const expiresInSec = parseTtlToSeconds(refreshTtl, 7 * 86_400);
@@ -215,15 +248,13 @@ export class AuthService {
       include: { roles: { include: { role: true } } },
     });
 
-    const ok =
-      !!user &&
-      user.status === 1 &&
-      (await argon2.verify(user.passwordHash, password));
+    const ok = !!user && user.status === 1 && (await argon2.verify(user.passwordHash, password));
 
     if (!ok || !user) {
       await this.recordLoginFailure(username, ip);
       // Re-check after increment so the attempt that crosses the threshold
       // is already locked for subsequent tries (and this response stays 403).
+      this.metrics.incLoginFailed();
       this.audit.record({
         action: 'auth.login_failed',
         module: 'auth',
@@ -241,6 +272,7 @@ export class AuthService {
     const { token: refreshToken } = await this.issueRefresh(user.id);
     this.setRefreshCookie(res, refreshToken);
 
+    this.metrics.incLoginSuccess();
     this.audit.record({
       action: 'auth.login',
       module: 'auth',
@@ -262,10 +294,7 @@ export class AuthService {
     };
   }
 
-  async refresh(
-    refreshCookie: string | undefined,
-    res: Response,
-  ): Promise<string> {
+  async refresh(refreshCookie: string | undefined, res: Response): Promise<string> {
     if (!refreshCookie) {
       this.clearRefreshCookie(res);
       throw new ForbiddenException('Forbidden');
@@ -314,10 +343,7 @@ export class AuthService {
     return accessToken;
   }
 
-  async logout(
-    refreshCookie: string | undefined,
-    res: Response,
-  ): Promise<string> {
+  async logout(refreshCookie: string | undefined, res: Response): Promise<string> {
     let logoutUserId: string | undefined;
     let logoutUsername: string | undefined;
     if (refreshCookie) {
@@ -380,7 +406,7 @@ export class AuthService {
       },
       include: { permission: true },
     });
-    const codes = [...new Set(rows.map((r) => r.permission.code))].sort();
+    const codes = [...new Set(rows.map((r) => r.permission.code))].toSorted();
     await this.redis.set(cacheKey, JSON.stringify(codes), CODES_CACHE_TTL);
     return codes;
   }

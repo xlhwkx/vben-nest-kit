@@ -1,25 +1,25 @@
-import {
-  Injectable,
-  ServiceUnavailableException,
-} from "@nestjs/common";
-import { PrismaService } from "../../prisma/prisma.service";
-import { RedisService } from "../../redis/redis.service";
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { MetricsService } from '../../observability/metrics.service';
+import { PrismaService } from '../../prisma/prisma.service';
+import { RedisService } from '../../redis/redis.service';
 
 @Injectable()
 export class HealthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    private readonly metrics: MetricsService,
   ) {}
 
   live() {
-    return { status: "ok" as const };
+    this.metrics.incHealthLive();
+    return { status: 'ok' as const };
   }
 
   check() {
     return {
-      status: "ok" as const,
-      service: "qingzhan-server",
+      status: 'ok' as const,
+      service: 'qingzhan-server',
     };
   }
 
@@ -45,18 +45,17 @@ export class HealthService {
     }
 
     if (!postgres || !redis) {
-      const failed = [
-        !postgres ? "postgres" : null,
-        !redis ? "redis" : null,
-      ].filter(Boolean);
+      this.metrics.incHealthReady(false);
+      const failed = [postgres ? null : 'postgres', redis ? null : 'redis'].filter(Boolean);
       throw new ServiceUnavailableException({
-        message: "Service Unavailable",
-        error: `not ready: ${failed.join(",")}`,
+        message: 'Service Unavailable',
+        error: `not ready: ${failed.join(',')}`,
       });
     }
 
+    this.metrics.incHealthReady(true);
     return {
-      status: "ok" as const,
+      status: 'ok' as const,
       postgres: true,
       redis: true,
     };

@@ -20,6 +20,7 @@ import { DemoModule } from './modules/demo/demo.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
 import { RedisService } from './redis/redis.service';
+import { ObservabilityModule } from './observability/observability.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { RedisService } from './redis/redis.service';
     JwtModule.register({ global: true }),
     PrismaModule,
     RedisModule,
+    ObservabilityModule,
     ThrottlerModule.forRootAsync({
       inject: [ConfigService, RedisService],
       useFactory: (config: ConfigService, redis: RedisService) => {
@@ -61,9 +63,7 @@ import { RedisService } from './redis/redis.service';
                   path?: string;
                 }>();
                 if (req.method !== 'POST') return true;
-                const raw = String(
-                  req.originalUrl ?? req.url ?? req.path ?? '',
-                ).split('?')[0];
+                const raw = String(req.originalUrl ?? req.url ?? req.path ?? '').split('?')[0];
                 return !/\/auth\/login\/?$/.test(raw);
               },
             },

@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  OnModuleDestroy,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 
@@ -29,9 +24,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       this.logger.log('Redis connected');
     } catch (error) {
       this.healthy = false;
-      this.logger.warn(
-        `Redis connect failed (auth still works without cache): ${String(error)}`,
-      );
+      this.logger.warn(`Redis connect failed (auth still works without cache): ${String(error)}`);
     }
   }
 
@@ -103,6 +96,31 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    * INCR + ensure TTL (set expire on first hit or when key has no TTL).
    * Returns null when Redis is unavailable (caller decides fail-open/closed).
    */
+
+  /**
+   * GET that propagates Redis errors (auth:fail lock fail-closed).
+   * Soft get() still returns null for optional cache paths.
+   */
+  async getStrict(key: string): Promise<string | null> {
+    try {
+      return await this.client.get(key);
+    } catch (error) {
+      this.healthy = false;
+      throw error;
+    }
+  }
+
+  /**
+   * INCR+TTL that throws when Redis is down (login failure accounting).
+   */
+  async incrWithTtlStrict(key: string, ttlSeconds: number): Promise<number> {
+    const n = await this.incrWithTtl(key, ttlSeconds);
+    if (n === null) {
+      throw new Error('Redis unavailable for incrWithTtl');
+    }
+    return n;
+  }
+
   async incrWithTtl(key: string, ttlSeconds: number): Promise<number | null> {
     try {
       const n = await this.client.incr(key);

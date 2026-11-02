@@ -22,3 +22,5 @@
 ## Changelog
 
 - 青栈变更：仓库根 [`CHANGELOG.qingzhan.md`](../../CHANGELOG.qingzhan.md)（不覆盖上游各包 CHANGELOG）
+
+- [observability.md](./observability.md) — metrics / OTel / auth:fail fail-closed

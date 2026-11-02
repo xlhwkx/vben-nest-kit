@@ -81,6 +81,16 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().optional(),
+  /** Observability: OpenTelemetry skeleton (default off — no network). */
+  OTEL_ENABLED: boolish,
+  /** none | console | otlp (otlp needs external SDK wiring; see docs) */
+  OTEL_TRACES_EXPORTER: z.enum(['none', 'console', 'otlp']).default('none'),
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().optional(),
+  OTEL_SERVICE_NAME: z.string().default('qingzhan-server'),
+  /** Expose Prometheus text at GET /api/health/metrics (default on). */
+  METRICS_ENABLED: boolish,
+  /** Optional bearer token for /metrics; if set, Authorization: Bearer required. */
+  METRICS_TOKEN: z.string().optional(),
 });
 
 export type AppEnv = z.infer<typeof envSchema> & {
@@ -104,6 +114,9 @@ export function loadEnv(raw: NodeJS.ProcessEnv = process.env): AppEnv {
     CAPTCHA_REQUIRED: Boolean(data.CAPTCHA_REQUIRED),
     CAPTCHA_E2E_BYPASS: Boolean(data.CAPTCHA_E2E_BYPASS),
     SMTP_SECURE: Boolean(data.SMTP_SECURE),
+    OTEL_ENABLED: Boolean(data.OTEL_ENABLED),
+    // default metrics on when unset (light default)
+    METRICS_ENABLED: data.METRICS_ENABLED === undefined ? true : Boolean(data.METRICS_ENABLED),
     corsOrigins: data.CORS_ORIGINS.split(',')
       .map((s) => s.trim())
       .filter(Boolean),

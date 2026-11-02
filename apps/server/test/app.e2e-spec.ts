@@ -7,6 +7,7 @@ import request from 'supertest';
 import type { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
+import { requestIdMiddleware } from '../src/common/middleware/request-id.middleware';
 import { RedisService } from '../src/redis/redis.service';
 
 /**
@@ -837,5 +838,62 @@ describe('Login throttle fail-closed (e2e)', () => {
     } finally {
       getClientSpy.mockRestore();
     }
+  });
+});
+
+describe('Login auth:fail lock fail-closed (e2e)', () => {
+  let app: INestApplication<App>;
+  let redis: RedisService;
+
+  beforeAll(async () => {
+    process.env.THROTTLE_STORAGE = 'memory';
+    process.env.THROTTLE_LIMIT = '10000';
+    process.env.THROTTLE_LOGIN_LIMIT = '1000';
+    process.env.AUTH_FAIL_USER_MAX = '5';
+    process.env.AUTH_FAIL_IP_MAX = '10000';
+    process.env.METRICS_ENABLED = 'true';
+
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+
+    app = moduleFixture.createNestApplication();
+    app.use(cookieParser());
+    app.use(requestIdMiddleware);
+    app.setGlobalPrefix('api');
+    app.enableVersioning({
+      type: VersioningType.URI,
+      defaultVersion: VERSION_NEUTRAL,
+    });
+    app.useGlobalFilters(new HttpExceptionFilter());
+    await app.init();
+    redis = app.get(RedisService);
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it('Redis getStrict failure on login → 503 Login lock unavailable', async () => {
+    const spy = jest
+      .spyOn(redis, 'getStrict')
+      .mockRejectedValue(new Error('simulated redis down for auth:fail'));
+    try {
+      const res = await request(app.getHttpServer())
+        .post('/api/auth/login')
+        .send({ username: 'vben', password: '123456' })
+        .expect(503);
+      expect(spy).toHaveBeenCalled();
+      expect(res.body.code).toBe(-1);
+      expect(String(res.body.message)).toMatch(/login lock unavailable/i);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('GET /api/health/metrics returns prometheus text', async () => {
+    const res = await request(app.getHttpServer()).get('/api/health/metrics').expect(200);
+    expect(String(res.text)).toMatch(/qingzhan_http_requests_total/);
+    expect(String(res.text)).toMatch(/qingzhan_auth_login_fail_closed_total/);
   });
 });
