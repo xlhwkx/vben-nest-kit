@@ -76,3 +76,9 @@ apps/server/pnpm-lock.yaml
 apps/server/_smoke*
 _smoke*
 
+
+# qingzhan server
+apps/server/.env
+apps/server/src/generated/
+apps/server/_smoke*
+

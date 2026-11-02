@@ -1,5 +1,10 @@
-import { Module } from '@nestjs/common';
+import { Module } from "@nestjs/common";
+import { MenuController } from "./menu.controller";
+import { MenuService } from "./menu.service";
 
-/** Menu Feature 壳（对照 /api/menu/all） */
-@Module({})
+@Module({
+  controllers: [MenuController],
+  providers: [MenuService],
+  exports: [MenuService],
+})
 export class MenuModule {}

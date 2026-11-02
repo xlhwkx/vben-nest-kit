@@ -54,19 +54,45 @@ pnpm --filter @qingzhan/server start:dev
 
 **安装说明：** 根 `pnpm install` 会跑 Vben monorepo 的 postinstall；若因网络/leftover 失败，**不要阻塞后端**——改用 `cd apps/server && pnpm install --ignore-workspace`。`apps/server/pnpm-lock.yaml` 已加入 `.gitignore`（workspace 场景下以根 lock 为准）。目标是把 `@qingzhan/server` 稳定进根 workspace（`pnpm --filter @qingzhan/server`），当前允许上述 fallback。
 
-当前切片（M1 骨架）：
+当前切片（Auth P0）：
 
-- Nest 12 + Express
-- 全局信封 `{ code, data, error, message }`（`ResponseInterceptor`）
-- `HttpExceptionFilter` 错误信封桩
-- 双前缀占位：`/api`（Vben 兼容）+ `/api/v1`（URI versioning）
-- Feature 壳：`AuthModule` / `UserModule` / `MenuModule`（尚未实现登录）
-- Compose：Postgres 16 + Redis 7（`REDIS_PASSWORD` / 带密 `REDIS_URL`，见 `.env.example`）
+- Prisma 7 + PostgreSQL（User/Role/Permission/RefreshToken）
+- Argon2id + JWT access/refresh（refresh 哈希入库，Cookie 名 `jwt`）
+- Redis 权限码短缓存（`perm:codes:{userId}`）
+- CORS credentials + Cookie sameSite/secure 可配
 
-下一刀：P0 认证链路（login / refresh / logout / codes / user/info / menu/all）。
 
-## 前端联调
+## Auth P0（已落地）
 
-开发代理默认把 `/api` 指到 `http://localhost:5320`。关掉或勿启动 `backend-mock`，改用本 Nest。
+合同路径（均挂 `/api` 与 `/api/v1`）：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/auth/login` | 信封；`data.accessToken`；Set-Cookie `jwt`=refresh；**不返回 password** |
+| POST | `/auth/refresh` | **纯 accessToken 字符串**（非信封）；读 Cookie `jwt`；旋转 refresh |
+| POST | `/auth/logout` | 清 Cookie + 吊销 refresh |
+| GET | `/auth/codes` | Bearer；权限码数组 |
+| GET | `/user/info` | Bearer；用户摘要 |
+| GET | `/menu/all` | Bearer；最小动态菜单（Dashboard + 角色 demo） |
+
+Seed 账号（Argon2id）：`vben` / `admin` / `jack`，密码均为 `123456`。
+
+```bash
+cp .env.example .env
+docker compose up -d
+cd apps/server
+pnpm install --ignore-workspace
+pnpm exec prisma generate
+pnpm exec prisma migrate deploy   # 或 migrate dev
+pnpm exec prisma db seed
+pnpm run build && pnpm run start:prod
+# 默认 http://localhost:5320
+```
+
+> 本机若 5432/6379 已被占用，`.env.example` 默认宿主端口为 **55433**（PG）/ **56379**（Redis）。
+
+
+下一刀：系统菜单/角色/用户 CRUD、Swagger、审计。
 
 上游 Vben 文档见 `README.vben.md` / `README.zh-CN.md`。
+
