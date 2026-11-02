@@ -14,6 +14,11 @@ model User {
   realName     String         @map("real_name") @db.VarChar(128)
   homePath     String?        @map("home_path") @db.VarChar(255)
   avatar       String?        @db.VarChar(512)
+  /// 0=女 1=男 2=未知（合同 user_gender）
+  gender       Int            @default(2)
+  /// 部门 id（Dept 模块未落地前仅存值，无 FK）
+  deptId       String?        @map("dept_id") @db.Uuid
+  remark       String?        @db.VarChar(512)
   status       Int            @default(1) // 1=enabled 0=disabled
   tokenVersion Int            @default(0) @map("token_version")
   createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -22,6 +27,8 @@ model User {
   roles        UserRole[]
   refreshTokens RefreshToken[]
 
+  @@index([status])
+  @@index([deptId])
   @@map("users")
 }
 

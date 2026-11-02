@@ -188,6 +188,13 @@ const ROLE_WRITE_CODES = [
   "System:Role:Delete",
 ] as const;
 
+/** System User write codes — granted to super/admin only (not user/jack) */
+const USER_WRITE_CODES = [
+  "System:User:Create",
+  "System:User:Update",
+  "System:User:Delete",
+] as const;
+
 const SHARED_MENU_NAMES = new Set([
   "Dashboard",
   "Analytics",
@@ -359,6 +366,34 @@ async function main() {
     }
   }
   console.log(`  ok role write perms for super/admin: ${ROLE_WRITE_CODES.join(", ")}`);
+
+  // Grant System User write permissions to super + admin only
+  const userWriteRoleCodes = ["super", "admin"] as const;
+  for (const code of USER_WRITE_CODES) {
+    const perm = await prisma.permission.upsert({
+      where: { code },
+      update: { name: code },
+      create: { code, name: code },
+    });
+    for (const roleCode of userWriteRoleCodes) {
+      const roleId = roleIds.get(roleCode);
+      if (!roleId) continue;
+      await prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: { roleId, permissionId: perm.id },
+        },
+        update: {},
+        create: { roleId, permissionId: perm.id },
+      });
+    }
+    const userRoleId = roleIds.get("user");
+    if (userRoleId) {
+      await prisma.rolePermission.deleteMany({
+        where: { roleId: userRoleId, permissionId: perm.id },
+      });
+    }
+  }
+  console.log(`  ok user write perms for super/admin: ${USER_WRITE_CODES.join(", ")}`);
 
 
   const menuByName = new Map<string, string>();
