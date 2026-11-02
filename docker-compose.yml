@@ -1,0 +1,38 @@
+# 青栈本地基础设施：Postgres 16 + Redis 7
+# 用法：在仓库根目录执行 docker compose up -d
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: qingzhan-postgres
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-qingzhan}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-qingzhan}
+      POSTGRES_DB: ${POSTGRES_DB:-qingzhan}
+    volumes:
+      - qingzhan_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-qingzhan}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: qingzhan-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - qingzhan_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  qingzhan_pg_data:
+  qingzhan_redis_data:
