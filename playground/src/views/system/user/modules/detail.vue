@@ -7,15 +7,16 @@ import { useVbenDrawer, VbenDescriptions } from '@vben/common-ui';
 
 import { $t } from '#/locales';
 
-import { useDescriptionItems } from '../data';
+import { ensureRoleLabelCache, useDescriptionItems } from '../data';
 
 const detailData = ref<SystemUserApi.SystemUser>();
 
 const items = computed(() => useDescriptionItems(detailData.value));
 
 const [Drawer, drawerApi] = useVbenDrawer<SystemUserApi.SystemUser>({
-  onOpenChange(isOpen) {
+  async onOpenChange(isOpen) {
     if (isOpen) {
+      await ensureRoleLabelCache();
       detailData.value = drawerApi.getData();
     }
   },

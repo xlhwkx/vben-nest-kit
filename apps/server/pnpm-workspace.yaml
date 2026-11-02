@@ -1,5 +1,8 @@
-# Standalone settings when installing under apps/server (CI uses --ignore-workspace).
-# pnpm 11+: build approvals live here, not in package.json#pnpm.
+# Optional standalone allowBuilds when installing under apps/server with
+# `pnpm install --ignore-workspace`. Note: pnpm 11 `--ignore-workspace` does
+# **not** apply this file's allowBuilds — that path still needs
+# `--config.dangerouslyAllowAllBuilds=true`. Preferred: install from monorepo
+# root with `pnpm install --filter @qingzhan/server...` (root allowBuilds).
 allowBuilds:
   "@parcel/watcher": true
   "@prisma/engines": true

@@ -16,6 +16,30 @@ import { $t } from '#/locales';
 
 const USER_GENDER_CODE = 'user_gender';
 
+/** roleId → "name" or "name (code)" for list/detail display */
+let roleLabelById = new Map<string, string>();
+
+/**
+ * Prefetch role labels via getRoleList (Nest returns { items, total }).
+ * Safe to call repeatedly; refreshes the cache.
+ */
+export async function ensureRoleLabelCache(): Promise<void> {
+  const res = await getRoleList({ page: 1, pageSize: 500 });
+  const items = Array.isArray(res)
+    ? res
+    : ((res as { items?: Array<{ code?: string; id: string; name: string }> })
+        ?.items ?? []);
+  roleLabelById = new Map(
+    items.map((r) => [r.id, r.code ? `${r.name} (${r.code})` : r.name]),
+  );
+}
+
+/** Map role ids to display labels; unknown ids fall back to raw id. */
+export function formatRoleLabels(roleIds?: string[]): string {
+  if (!roleIds?.length) return '';
+  return roleIds.map((id) => roleLabelById.get(id) ?? id).join(', ');
+}
+
 export function useFormSchema(isEdit = false): VbenFormSchema[] {
   const dictStore = useDictStore();
   return [
@@ -171,7 +195,7 @@ export function useDescriptionItems(
     { label: $t('system.user.dept'), content: row?.deptId },
     {
       label: $t('system.user.roles'),
-      content: row?.roles?.join(', '),
+      content: formatRoleLabels(row?.roles),
     },
     {
       label: $t('system.user.gender'),
@@ -213,8 +237,8 @@ export function useColumns<T = SystemUserApi.SystemUser>(
     {
       field: 'roles',
       formatter: ({ cellValue }) =>
-        Array.isArray(cellValue) ? cellValue.join(', ') : (cellValue ?? ''),
-      minWidth: 140,
+        formatRoleLabels(Array.isArray(cellValue) ? cellValue : undefined),
+      minWidth: 160,
       title: $t('system.user.roles'),
     },
     {

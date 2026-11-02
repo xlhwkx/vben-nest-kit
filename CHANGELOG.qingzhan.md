@@ -25,11 +25,11 @@
 
 ### Fixed
 - list `startTime`/`endTime` date-only → **Asia/Shanghai** calendar day (was UTC day end)
+- playground system/user 列表/详情：roles 展示 **name (code)**（getRoleList 映射），不再只显示 id
 - playground system/user：角色多选绑定 `roles`；创建/编辑密码前端 ≥6
 
 - server tsconfig: drop unused `baseUrl`; test `moduleResolution` -> `nodenext` (oxlint type-aware)
 - system/role：PUT 支持部分更新（playground 状态开关只传 `{status}`）；POST `code` 可选自动 slug
-- system user/role list：`YYYY-MM-DD` `endTime` 含当日 UTC 末（RangePicker 日界）
 - Local storage：`put` 拒绝 `..` / 绝对路径穿越；单测覆盖
 - `STORAGE_DRIVER=s3` 时跳过本地 `useStaticAssets(/uploads)`
 - 文档：`S3_PUBLIC_URL` / 桶策略决定返回 URL 是否可读
@@ -38,7 +38,7 @@
 - 技术方案 Redis 键名与实现对齐：`auth:fail:user:…` / `auth:fail:ip:…`
 - 文档明确 `THROTTLE_STORAGE=memory` 下无登录 Redis fail-closed；`auth:fail` 在 Redis 宕时 fail-open
 - e2e：Redis `eval` 失败时 login → 503（fail-closed）
-- CI：`pnpm/action-setup` 去掉 `version`，改用根 `packageManager`；`apps/server/pnpm-workspace.yaml` `allowBuilds` + install `--config.dangerouslyAllowAllBuilds=true`（pnpm 11 / `--ignore-workspace`）
+- CI：`pnpm/action-setup` 去掉 `version`，改用根 `packageManager`；install 改为根 `--filter @qingzhan/server...` + 根 `allowBuilds`（去掉 `dangerouslyAllowAllBuilds`；`--ignore-workspace` 不会读 allowBuilds）
 - CI：GHA Node **24**（Jest 30 + Nest 12 ESM 需 ≥24.9）
 
 ### Security
@@ -103,5 +103,3 @@ HEAD：以 `v0.1.0` tag 所指 commit 为准。
 
 - 已打 annotated tag **`v0.1.0`**；仓库当前为 **private**，**暂不创建 GitHub Release**（需要对外链接时再补）。
 - 真源仍是 `规则/vben-nestjs-backend-tech-plan.md` 与 `规则/api-contract-vben.md`。
-
-

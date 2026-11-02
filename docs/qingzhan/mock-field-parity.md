@@ -73,7 +73,7 @@
 
 | Priority | Item | Suggestion |
 |----------|------|------------|
-| P2 | CI drop `dangerouslyAllowAllBuilds` | whitelist only |
+| P2 | CI drop `dangerouslyAllowAllBuilds` | **done**: root `allowBuilds` + `pnpm install --filter @qingzhan/server...` |
 | Later | SliderCaptcha UI E2E, real mail, public repo/Release | wait for user approval |
 
 Repo visibility unchanged; no Release cut.

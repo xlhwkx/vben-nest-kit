@@ -216,7 +216,13 @@ catalog:
 
 allowBuilds:
   '@parcel/watcher': true
+  '@prisma/engines': true
+  '@scarf/scarf': true
+  argon2: true
   core-js: true
   esbuild: true
   lefthook: true
+  msgpackr-extract: true
+  prisma: true
   vue-demi: true
+
