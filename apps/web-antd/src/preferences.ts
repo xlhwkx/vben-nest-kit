@@ -19,6 +19,9 @@ interface WebAntdPreferencesExtension {
 export const overridesPreferences = defineOverridesPreferences({
   // overrides
   app: {
+    // 联调 Nest：后端动态路由 + Cookie refresh
+    accessMode: 'backend',
+    enableRefreshToken: true,
     name: import.meta.env.VITE_APP_TITLE,
   },
   copyright: appCopyrightPreferences,

@@ -100,8 +100,37 @@ pnpm run build && pnpm run start:prod
 
 Auth 登录成功/失败/登出与 System 写操作会异步落 `audit_logs`；响应带头 `x-request-id`。
 
-下一刀：前端联调改 Vben baseURL（可选）。Swagger 已开：`/api/docs`。
+## 前端联调（web-antd ↔ Nest）
+
+官方联调路径只改 **web-antd**（其它 `web-*` 同理：关 Nitro mock + `accessMode: 'backend'` + proxy 指向 Nest）。
+
+### 配置（已落库）
+
+| 项 | 值 |
+|----|-----|
+| `apps/web-antd/.env.development` → `VITE_NITRO_MOCK` | `false`（关 Nitro / backend-mock） |
+| 同上 → `VITE_GLOB_API_URL` | `/api`（经 vite proxy） |
+| `apps/web-antd/vite.config.ts` proxy | `/api` → `http://localhost:5320/api` |
+| `apps/web-antd/src/preferences.ts` | `app.accessMode: 'backend'`、`app.enableRefreshToken: true` |
+
+> **改 preferences 后务必清浏览器站点数据 / localStorage**（Vben 会持久化偏好，否则仍可能是 `frontend`）。
+
+### 启动
+
+```bash
+# 终端 1：基础设施 + Nest（若尚未在跑）
+cp .env.example .env          # 首次
+docker compose up -d
+cd apps/server && pnpm start:dev   # 或根目录 pnpm --filter @qingzhan/server start:dev
+# Nest: http://localhost:5320
+
+# 终端 2：前端
+pnpm install                  # 首次 / 依赖变更后
+pnpm dev:antd                 # → http://localhost:5666
+```
+
+Demo 账号（密码均为 `123456`）：`vben`（super）/ `admin` / `jack`（user）。
+
+Swagger：`http://localhost:5320/api/docs`。合同验收清单：`规则/api-contract-vben.md` §11。
 
 上游 Vben 文档见 `README.vben.md` / `README.zh-CN.md`。
-
-
