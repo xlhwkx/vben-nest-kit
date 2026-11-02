@@ -33,6 +33,7 @@ Auth · User · Menu · System（用户/角色/菜单/部门/字典）· Upload 
 - Nest：`5320`
 - web-antd dev：`5666`（vite proxy → Nest）
 - Compose Postgres / Redis：见 `apps/server/.env.example`（宿主映射避开本机常用口）
+- 生产容器部署：`docs/qingzhan/deploy.md`（`compose.prod.yml` + `apps/server/Dockerfile`）
 
 ## 横切（已交付要点）
 

@@ -5,3 +5,15 @@ node_modules
 dist
 .turbo
 dist.zip
+
+# 青栈 server 镜像构建加速（保留各 workspace package.json 供 pnpm lock 解析）
+**/.turbo
+**/coverage
+**/uploads
+uploads
+.cursor
+.vscode
+.idea
+*.log
+playwright-report
+test-results

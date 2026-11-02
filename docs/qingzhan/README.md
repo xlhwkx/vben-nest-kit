@@ -6,6 +6,8 @@
 |------|------|---------|
 | 架构 | [architecture.md](./architecture.md) | [architecture.en.md](./architecture.en.md) |
 | 贡献指南 | [contributing.md](./contributing.md) | [contributing.en.md](./contributing.en.md) |
+| 生产部署 | [deploy.md](./deploy.md) | — |
+| 可观测性 | [observability.md](./observability.md) | — |
 | v0.1 发版说明（草稿） | [release-notes-v0.1.md](./release-notes-v0.1.md) | same |
 | v0.2 发版说明（草稿） | [release-notes-v0.2.0.md](./release-notes-v0.2.0.md) | same |
 | 开源检查清单 | [open-source-checklist.md](./open-source-checklist.md) | EN summary in-page |
@@ -22,5 +24,3 @@
 ## Changelog
 
 - 青栈变更：仓库根 [`CHANGELOG.qingzhan.md`](../../CHANGELOG.qingzhan.md)（不覆盖上游各包 CHANGELOG）
-
-- [observability.md](./observability.md) — metrics / OTel / auth:fail fail-closed

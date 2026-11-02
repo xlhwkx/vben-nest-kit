@@ -24,7 +24,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       this.logger.log('Redis connected');
     } catch (error) {
       this.healthy = false;
-      this.logger.warn(`Redis connect failed (auth still works without cache): ${String(error)}`);
+      this.logger.warn(
+        `Redis connect failed (auth:fail / login throttle are fail-closed until Redis recovers): ${String(error)}`,
+      );
     }
   }
 

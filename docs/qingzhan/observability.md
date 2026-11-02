@@ -21,6 +21,7 @@
 - 端点：`GET /api/health/metrics`（`SkipEnvelope`，纯文本）。
 - 默认 **开启**（`METRICS_ENABLED` 未设或 true）。设 `METRICS_ENABLED=false` → 404。
 - 可选鉴权：设 `METRICS_TOKEN=...` 后须 `Authorization: Bearer <token>`（否则 401）。**约定仅内网 / sidecar 抓取**，勿对公网裸奔。
+- **生产硬门槛**：`NODE_ENV=production` 且指标未关时 **必须** 配置 `METRICS_TOKEN`，否则进程拒绝启动；或设 `METRICS_ENABLED=false`。详见 `docs/qingzhan/deploy.md`。
 - 已暴露：`qingzhan_http_requests_total`、延迟直方图、`qingzhan_auth_login_*`（含 `fail_closed`）、health live/ready 计数。
 
 抓取示例（Prometheus）：

@@ -97,13 +97,82 @@ export type AppEnv = z.infer<typeof envSchema> & {
   corsOrigins: string[];
 };
 
+/** Placeholder JWT strings from .env.example — banned in production. */
+const PLACEHOLDER_JWT_MARKERS = ['change-me-access-secret', 'change-me-refresh-secret'] as const;
+
+/**
+ * Production-only hard gates (clear errors, exit before listen).
+ * Dev/test stay lenient so local `.env.example` keeps working.
+ */
+export function assertProductionEnv(data: {
+  NODE_ENV: string;
+  JWT_ACCESS_SECRET: string;
+  JWT_REFRESH_SECRET: string;
+  CAPTCHA_E2E_BYPASS?: boolean;
+  METRICS_ENABLED?: boolean;
+  METRICS_TOKEN?: string;
+  COOKIE_SECURE?: boolean;
+}): void {
+  if (data.NODE_ENV !== 'production') return;
+
+  const problems: string[] = [];
+
+  if (data.CAPTCHA_E2E_BYPASS) {
+    problems.push('CAPTCHA_E2E_BYPASS must be false/unset in production (E2E harness only)');
+  }
+  for (const marker of PLACEHOLDER_JWT_MARKERS) {
+    if (data.JWT_ACCESS_SECRET.includes(marker) || data.JWT_REFRESH_SECRET.includes(marker)) {
+      problems.push(
+        'JWT_ACCESS_SECRET / JWT_REFRESH_SECRET still use .env.example placeholders — generate real secrets (≥32 chars)',
+      );
+      break;
+    }
+  }
+  const metricsOn = data.METRICS_ENABLED !== false;
+  if (metricsOn && !data.METRICS_TOKEN?.trim()) {
+    problems.push(
+      'METRICS_ENABLED is on but METRICS_TOKEN is empty — set a scrape token or METRICS_ENABLED=false',
+    );
+  }
+
+  if (problems.length > 0) {
+    throw new Error(`Invalid production environment:\n  - ${problems.join('\n  - ')}`);
+  }
+
+  if (!data.COOKIE_SECURE) {
+    // Soft: reverse proxies sometimes terminate TLS; still surface the risk.
+    console.warn(
+      '[env] COOKIE_SECURE is false in production — set true unless TLS is terminated in a trusted mesh and cookies stay internal',
+    );
+  }
+}
+
 export function loadEnv(raw: NodeJS.ProcessEnv = process.env): AppEnv {
   const parsed = envSchema.safeParse(raw);
   if (!parsed.success) {
-    const msg = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
-    throw new Error(`Invalid environment: ${msg}`);
+    const lines = parsed.error.issues.map((i) => {
+      const path = i.path.length > 0 ? i.path.join('.') : '(root)';
+      return `  - ${path}: ${i.message}`;
+    });
+    throw new Error(
+      `Invalid environment (missing or bad required config):\n${lines.join('\n')}\n` +
+        'Required: DATABASE_URL, REDIS_URL, JWT_ACCESS_SECRET (≥32), JWT_REFRESH_SECRET (≥32). See apps/server/.env.example',
+    );
   }
   const data = parsed.data;
+
+  const metricsEnabled = data.METRICS_ENABLED === undefined ? true : Boolean(data.METRICS_ENABLED);
+
+  assertProductionEnv({
+    NODE_ENV: data.NODE_ENV,
+    JWT_ACCESS_SECRET: data.JWT_ACCESS_SECRET,
+    JWT_REFRESH_SECRET: data.JWT_REFRESH_SECRET,
+    CAPTCHA_E2E_BYPASS: Boolean(data.CAPTCHA_E2E_BYPASS),
+    METRICS_ENABLED: metricsEnabled,
+    METRICS_TOKEN: data.METRICS_TOKEN,
+    COOKIE_SECURE: Boolean(data.COOKIE_SECURE),
+  });
+
   return {
     ...data,
     COOKIE_SECURE: Boolean(data.COOKIE_SECURE),
@@ -116,7 +185,7 @@ export function loadEnv(raw: NodeJS.ProcessEnv = process.env): AppEnv {
     SMTP_SECURE: Boolean(data.SMTP_SECURE),
     OTEL_ENABLED: Boolean(data.OTEL_ENABLED),
     // default metrics on when unset (light default)
-    METRICS_ENABLED: data.METRICS_ENABLED === undefined ? true : Boolean(data.METRICS_ENABLED),
+    METRICS_ENABLED: metricsEnabled,
     corsOrigins: data.CORS_ORIGINS.split(',')
       .map((s) => s.trim())
       .filter(Boolean),

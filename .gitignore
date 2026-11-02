@@ -92,3 +92,5 @@ apps/server/_sysmenu*
 apps/server/uploads/
 uploads/
 
+
+apps/server/.docker-build.log
