@@ -100,10 +100,15 @@ pnpm run build && pnpm run start:prod
 
 Auth 登录成功/失败/登出与 System 写操作会异步落 `audit_logs`；响应带头 `x-request-id`。
 
+### E2E
+
+```bash
+cd apps/server && pnpm test:e2e
+```
+
+需 Compose + `.env` + seed；详见 `apps/server/README.md`。Node engines：`^22.18 || ^24.12`（需支持 `--experimental-vm-modules`）。
+
 ### 限流
-
-E2E 最小套件：cd apps/server && pnpm test:e2e（需 Compose + .env + seed；说明见 pps/server/README.md）。
-
 
 `@nestjs/throttler`：全局默认 120 次/60s；`POST /auth/login` 更严（默认 10 次/60s）→ 429。存储默认 Redis（`THROTTLE_STORAGE`，见 `apps/server/.env.example`）。Health 跳过限流。
 

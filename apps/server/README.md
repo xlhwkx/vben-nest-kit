@@ -33,9 +33,11 @@ Swagger UI（非 production 默认开；生产设 `SWAGGER_ENABLED=true` 强制�
 
 ## E2E
 
-依赖本机 Compose（Postgres + Redis）与 pps/server/.env（含 seed 账号）。不要提交密钥。
+依赖本机 Compose（Postgres + Redis）与 `apps/server/.env`（含 seed 账号）。不要提交密钥。
 
-`ash
+Node：仓库 engines 为 `^22.18 || ^24.12`；本套件需支持 `--experimental-vm-modules` 的 Node（脚本已带该 flag）。
+
+```bash
 # 仓库根
 docker compose up -d
 cd apps/server
@@ -44,6 +46,6 @@ pnpm exec prisma migrate deploy
 pnpm exec prisma db seed
 pnpm test:e2e
 # 或根目录：pnpm --dir apps/server test:e2e
-`
+```
 
 覆盖：health live/ready、login（含错密）、Bearer user/info·codes·menu/all、Cookie refresh（纯字符串）、logout 清 cookie、无 token 401；可选 jack audit 403、upload 缺 file 400。套件内将 THROTTLE_STORAGE=memory 并抬高 limit，避免误伤。
