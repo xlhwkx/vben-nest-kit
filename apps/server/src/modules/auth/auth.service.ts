@@ -45,12 +45,12 @@ export class AuthService {
         | "strict"
         | "none") ?? "lax";
     const refreshTtl = this.config.get<string>("JWT_REFRESH_TTL") ?? "7d";
-    const maxAge = parseTtlToSeconds(refreshTtl, 7 * 86400);
+    const maxAgeSec = parseTtlToSeconds(refreshTtl, 7 * 86400);
     return {
       httpOnly: true,
       secure,
       sameSite,
-      maxAge,
+      maxAge: maxAgeSec * 1000,
       path: "/",
     } as const;
   }
@@ -114,14 +114,8 @@ export class AuthService {
   }
 
   async login(dto: LoginDto, res: Response) {
-    const username = dto.username?.trim();
+    const username = dto.username.trim();
     const password = dto.password;
-    if (!username || !password) {
-      throw new ForbiddenException({
-        message: "BadRequestException",
-        error: "Username and password are required",
-      });
-    }
 
     const user = await this.prisma.user.findFirst({
       where: { username, deletedAt: null },
