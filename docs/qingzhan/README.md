@@ -7,6 +7,7 @@
 | 架构 | [architecture.md](./architecture.md) | [architecture.en.md](./architecture.en.md) |
 | 贡献指南 | [contributing.md](./contributing.md) | [contributing.en.md](./contributing.en.md) |
 | v0.1 发版说明（草稿） | [release-notes-v0.1.md](./release-notes-v0.1.md) | same |
+| 开源检查清单 | [open-source-checklist.md](./open-source-checklist.md) | EN summary in-page |
 
 ## 真源（勿搬迁）
 

@@ -34,6 +34,7 @@ vben-nest-kit/
 - 索引：`docs/qingzhan/README.md`
 - 青栈 Changelog：[CHANGELOG.qingzhan.md](CHANGELOG.qingzhan.md)
 - v0.1 Release 草稿：[docs/qingzhan/release-notes-v0.1.md](docs/qingzhan/release-notes-v0.1.md)
+- 开源检查清单：[docs/qingzhan/open-source-checklist.md](docs/qingzhan/open-source-checklist.md)
 
 ## 后端（apps/server）快速开始
 
