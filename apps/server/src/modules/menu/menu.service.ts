@@ -1,99 +1,106 @@
 import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
 
-/** Minimal backend menus for accessMode=backend (P0). Full Menu CRUD = next slice. */
-const DASHBOARD = {
-  meta: { order: -1, title: "page.dashboard.title" },
-  name: "Dashboard",
-  path: "/dashboard",
-  redirect: "/dashboard/analytics",
-  children: [
-    {
-      name: "Analytics",
-      path: "analytics",
-      component: "/dashboard/analytics/index",
-      meta: { affixTab: true, title: "page.dashboard.analytics" },
-    },
-    {
-      name: "Workspace",
-      path: "workspace",
-      component: "/dashboard/workspace/index",
-      meta: { title: "page.dashboard.workspace" },
-    },
-  ],
+/** Route node shape for GET /menu/all (api-contract-vben.md §4.6) */
+export type MenuRouteNode = {
+  name: string;
+  path: string;
+  component?: string;
+  redirect?: string;
+  meta?: Record<string, unknown>;
+  children?: MenuRouteNode[];
 };
 
-function demosForRole(role: string) {
-  const map: Record<string, object> = {
-    super: {
-      component: "/demos/access/super-visible",
-      meta: {
-        icon: "mdi:button-cursor",
-        title: "demos.access.superVisible",
-      },
-      name: "AccessSuperVisibleDemo",
-      path: "super-visible",
-    },
-    admin: {
-      component: "/demos/access/admin-visible",
-      meta: {
-        icon: "mdi:button-cursor",
-        title: "demos.access.adminVisible",
-      },
-      name: "AccessAdminVisibleDemo",
-      path: "admin-visible",
-    },
-    user: {
-      component: "/demos/access/user-visible",
-      meta: {
-        icon: "mdi:button-cursor",
-        title: "demos.access.userVisible",
-      },
-      name: "AccessUserVisibleDemo",
-      path: "user-visible",
-    },
-  };
-  const child = map[role];
-  if (!child) return null;
-  return {
-    meta: { icon: "ic:baseline-view-in-ar", order: 1000, title: "demos.title" },
-    name: "Demos",
-    path: "/demos",
-    redirect: `/demos/access/${role}-visible`,
-    children: [
-      {
-        meta: { title: "demos.access.frontend.title" },
-        name: "AccessDemos",
-        path: "access",
-        children: [child],
-      },
-    ],
-  };
-}
+type MenuRow = {
+  id: string;
+  parentId: string | null;
+  name: string;
+  path: string;
+  component: string | null;
+  redirect: string | null;
+  type: string;
+  meta: unknown;
+  sortOrder: number;
+};
 
 @Injectable()
 export class MenuService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getAllForUser(userId: string) {
+  /**
+   * Build Vben RouteRecordStringComponent[] from DB menus linked to the
+   * current user's roles. Pure DB — no hardcoded tree.
+   */
+  async getAllForUser(userId: string): Promise<MenuRouteNode[]> {
     const user = await this.prisma.user.findFirst({
       where: { id: userId, deletedAt: null, status: 1 },
-      include: { roles: { include: { role: true } } },
+      include: { roles: { select: { roleId: true } } },
     });
     if (!user) {
       throw new UnauthorizedException("Unauthorized");
     }
-    const roles = user.roles.map((r) => r.role.code);
-    const menus: object[] = [DASHBOARD];
-    // Prefer primary demo role: super > admin > user
-    const primary =
-      roles.find((r) => r === "super") ??
-      roles.find((r) => r === "admin") ??
-      roles.find((r) => r === "user");
-    if (primary) {
-      const demo = demosForRole(primary);
-      if (demo) menus.push(demo);
+    const roleIds = user.roles.map((r) => r.roleId);
+    if (roleIds.length === 0) {
+      return [];
     }
-    return menus;
+
+    const links = await this.prisma.roleMenu.findMany({
+      where: { roleId: { in: roleIds } },
+      select: { menuId: true },
+    });
+    const allowedIds = new Set(links.map((l) => l.menuId));
+    if (allowedIds.size === 0) {
+      return [];
+    }
+
+    const rows = await this.prisma.menu.findMany({
+      where: {
+        id: { in: [...allowedIds] },
+        status: 1,
+        deletedAt: null,
+        // /menu/all is dynamic routes — buttons are access codes, not routes
+        NOT: { type: "button" },
+      },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    });
+
+    return this.buildTree(rows);
+  }
+
+  private buildTree(rows: MenuRow[]): MenuRouteNode[] {
+    const byId = new Map<string, MenuRow>();
+    for (const row of rows) byId.set(row.id, row);
+
+    const childrenMap = new Map<string | null, MenuRow[]>();
+    for (const row of rows) {
+      if (row.parentId && !byId.has(row.parentId)) {
+        continue;
+      }
+      const key = row.parentId;
+      const list = childrenMap.get(key) ?? [];
+      list.push(row);
+      childrenMap.set(key, list);
+    }
+
+    const toNode = (row: MenuRow): MenuRouteNode => {
+      const kids = childrenMap.get(row.id) ?? [];
+      const node: MenuRouteNode = {
+        name: row.name,
+        path: row.path,
+        meta:
+          row.meta && typeof row.meta === "object" && !Array.isArray(row.meta)
+            ? (row.meta as Record<string, unknown>)
+            : {},
+      };
+      if (row.component) node.component = row.component;
+      if (row.redirect) node.redirect = row.redirect;
+      if (kids.length > 0) {
+        node.children = kids.map(toNode);
+      }
+      return node;
+    };
+
+    const roots = childrenMap.get(null) ?? [];
+    return roots.map(toNode);
   }
 }
