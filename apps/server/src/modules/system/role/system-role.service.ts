@@ -172,7 +172,11 @@ export class SystemRoleService {
       if (dupCode) throw new ConflictException("Role code already exists");
     }
 
-    const menuIds = await this.validateMenuIds(input.permissions ?? []);
+    // Only replace RoleMenu when `permissions` is explicitly present (incl. []).
+    const hasPermissionsField = input.permissions !== undefined;
+    const menuIds = hasPermissionsField
+      ? await this.validateMenuIds(input.permissions ?? [])
+      : null;
     const nextStatus = input.status === 0 ? 0 : 1;
 
     const row = await this.prisma.$transaction(async (tx) => {
@@ -185,12 +189,14 @@ export class SystemRoleService {
           remark: input.remark?.trim() || null,
         },
       });
-      await tx.roleMenu.deleteMany({ where: { roleId: id } });
-      if (menuIds.length) {
-        await tx.roleMenu.createMany({
-          data: menuIds.map((menuId) => ({ roleId: id, menuId })),
-          skipDuplicates: true,
-        });
+      if (menuIds !== null) {
+        await tx.roleMenu.deleteMany({ where: { roleId: id } });
+        if (menuIds.length) {
+          await tx.roleMenu.createMany({
+            data: menuIds.map((menuId) => ({ roleId: id, menuId })),
+            skipDuplicates: true,
+          });
+        }
       }
       return tx.role.findUniqueOrThrow({
         where: { id },
