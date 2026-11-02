@@ -7,6 +7,10 @@ import { SystemUserController } from "./user/system-user.controller";
 import { SystemUserService } from "./user/system-user.service";
 import { SystemDeptController } from "./dept/system-dept.controller";
 import { SystemDeptService } from "./dept/system-dept.service";
+import { DictController } from "./dict/dict.controller";
+import { SystemDictTypeController } from "./dict/system-dict-type.controller";
+import { SystemDictDataController } from "./dict/system-dict-data.controller";
+import { SystemDictService } from "./dict/system-dict.service";
 
 @Module({
   controllers: [
@@ -14,18 +18,23 @@ import { SystemDeptService } from "./dept/system-dept.service";
     SystemRoleController,
     SystemUserController,
     SystemDeptController,
+    DictController,
+    SystemDictTypeController,
+    SystemDictDataController,
   ],
   providers: [
     SystemMenuService,
     SystemRoleService,
     SystemUserService,
     SystemDeptService,
+    SystemDictService,
   ],
   exports: [
     SystemMenuService,
     SystemRoleService,
     SystemUserService,
     SystemDeptService,
+    SystemDictService,
   ],
 })
 export class SystemModule {}

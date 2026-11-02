@@ -146,3 +146,36 @@ model Dept {
   @@map("depts")
 }
 
+
+model DictType {
+  id        String     @id @default(uuid(7)) @db.Uuid
+  name      String     @db.VarChar(128)
+  code      String     @unique @db.VarChar(64)
+  status    Int        @default(1)
+  remark    String?    @db.VarChar(512)
+  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  items     DictItem[]
+
+  @@index([status])
+  @@map("dict_types")
+}
+
+model DictItem {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  dictCode  String   @map("dict_code") @db.VarChar(64)
+  label     String   @db.VarChar(128)
+  /// number | string（合同/mock 均可）
+  value     Json
+  sort      Int      @default(0)
+  status    Int      @default(1)
+  color     String?  @db.VarChar(64)
+  remark    String?  @db.VarChar(512)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  type      DictType @relation(fields: [dictCode], references: [code], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([dictCode])
+  @@index([status])
+  @@map("dict_items")
+}

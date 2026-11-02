@@ -202,6 +202,13 @@ const DEPT_WRITE_CODES = [
   "System:Dept:Delete",
 ] as const;
 
+/** System Dict write codes — granted to super/admin only (not user/jack) */
+const DICT_WRITE_CODES = [
+  "System:Dict:Create",
+  "System:Dict:Update",
+  "System:Dict:Delete",
+] as const;
+
 const SHARED_MENU_NAMES = new Set([
   "Dashboard",
   "Analytics",
@@ -430,6 +437,34 @@ async function main() {
   }
   console.log(`  ok dept write perms for super/admin: ${DEPT_WRITE_CODES.join(", ")}`);
 
+  // Grant System Dict write permissions to super + admin only
+  const dictWriteRoleCodes = ["super", "admin"] as const;
+  for (const code of DICT_WRITE_CODES) {
+    const perm = await prisma.permission.upsert({
+      where: { code },
+      update: { name: code },
+      create: { code, name: code },
+    });
+    for (const roleCode of dictWriteRoleCodes) {
+      const roleId = roleIds.get(roleCode);
+      if (!roleId) continue;
+      await prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: { roleId, permissionId: perm.id },
+        },
+        update: {},
+        create: { roleId, permissionId: perm.id },
+      });
+    }
+    const userRoleId = roleIds.get("user");
+    if (userRoleId) {
+      await prisma.rolePermission.deleteMany({
+        where: { roleId: userRoleId, permissionId: perm.id },
+      });
+    }
+  }
+  console.log(`  ok dict write perms for super/admin: ${DICT_WRITE_CODES.join(", ")}`);
+
   const menuByName = new Map<string, string>();
   await upsertMenuTree(MENU_TREE, null, menuByName);
   console.log(`  ok menus upserted: ${menuByName.size}`);
@@ -500,6 +535,87 @@ async function main() {
     });
   }
   console.log(`  ok depts: 总公司 + ${childSpecs.length} children`);
+
+  // Minimal dict types + items (aligned with backend-mock)
+  const dictSpecs = [
+    {
+      code: "user_gender",
+      name: "用户性别",
+      remark: "用户性别字典",
+      items: [
+        { label: "男", value: 1, sort: 1 },
+        { label: "女", value: 0, sort: 2 },
+        { label: "未知", value: 2, sort: 3 },
+      ],
+    },
+    {
+      code: "common_status",
+      name: "通用状态",
+      remark: "启用/禁用",
+      items: [
+        { label: "启用", value: 1, color: "success", sort: 1 },
+        { label: "禁用", value: 0, color: "error", sort: 2 },
+      ],
+    },
+    {
+      code: "yes_no",
+      name: "是否",
+      remark: "是否选项",
+      items: [
+        { label: "是", value: 1, sort: 1 },
+        { label: "否", value: 0, sort: 2 },
+      ],
+    },
+  ] as const;
+
+  for (const spec of dictSpecs) {
+    const type = await prisma.dictType.upsert({
+      where: { code: spec.code },
+      update: {
+        name: spec.name,
+        remark: spec.remark,
+        status: 1,
+      },
+      create: {
+        code: spec.code,
+        name: spec.name,
+        remark: spec.remark,
+        status: 1,
+      },
+    });
+    for (const item of spec.items) {
+      const existing = await prisma.dictItem.findFirst({
+        where: {
+          dictCode: type.code,
+          label: item.label,
+        },
+      });
+      if (existing) {
+        await prisma.dictItem.update({
+          where: { id: existing.id },
+          data: {
+            value: item.value,
+            sort: item.sort,
+            status: 1,
+            color: "color" in item ? (item as { color?: string }).color ?? null : null,
+            remark: null,
+          },
+        });
+      } else {
+        await prisma.dictItem.create({
+          data: {
+            dictCode: type.code,
+            label: item.label,
+            value: item.value,
+            sort: item.sort,
+            status: 1,
+            color: "color" in item ? (item as { color?: string }).color ?? null : null,
+          },
+        });
+      }
+    }
+  }
+  console.log(`  ok dict types: ${dictSpecs.length}`);
 
   console.log("Seed done. Change default passwords before production.");
 }
