@@ -198,6 +198,7 @@ export class SystemUserService {
     if (dup) throw new ConflictException("Username already exists");
 
     const roleIds = await this.validateRoleIds(input.roles ?? []);
+    const deptId = await this.validateDeptId(input.deptId);
     const gender = this.normalizeGender(input.gender);
     const passwordHash = await argon2.hash(password, { type: argon2.argon2id });
 
@@ -210,10 +211,10 @@ export class SystemUserService {
             realName: name,
             status: input.status === 0 ? 0 : 1,
             gender,
-            deptId: input.deptId?.trim() || null,
             remark: input.remark?.trim() || null,
             homePath: input.homePath?.trim() || null,
             avatar: input.avatar?.trim() || null,
+            ...(deptId ? { dept: { connect: { id: deptId } } } : {}),
           },
         });
         if (roleIds.length) {
@@ -277,7 +278,10 @@ export class SystemUserService {
     }
 
     if (input.deptId !== undefined) {
-      data.deptId = input.deptId?.trim() || null;
+      const nextDeptId = await this.validateDeptId(input.deptId);
+      data.dept = nextDeptId
+        ? { connect: { id: nextDeptId } }
+        : { disconnect: true };
     }
 
     if (input.remark !== undefined) {
@@ -401,6 +405,21 @@ export class SystemUserService {
     if (row.homePath) item.homePath = row.homePath;
     if (row.avatar) item.avatar = row.avatar;
     return item;
+  }
+
+
+  private async validateDeptId(deptId: string | null | undefined): Promise<string | null> {
+    if (deptId === undefined || deptId === null) return null;
+    const id = String(deptId).trim();
+    if (!id || id === "0") return null;
+    const row = await this.prisma.dept.findFirst({
+      where: { id, deletedAt: null },
+      select: { id: true },
+    });
+    if (!row) {
+      throw new BadRequestException("deptId not found or deleted");
+    }
+    return row.id;
   }
 
   private async requireUser(id: string) {

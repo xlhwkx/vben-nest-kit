@@ -16,7 +16,6 @@ model User {
   avatar       String?        @db.VarChar(512)
   /// 0=女 1=男 2=未知（合同 user_gender）
   gender       Int            @default(2)
-  /// 部门 id（Dept 模块未落地前仅存值，无 FK）
   deptId       String?        @map("dept_id") @db.Uuid
   remark       String?        @db.VarChar(512)
   status       Int            @default(1) // 1=enabled 0=disabled
@@ -24,6 +23,7 @@ model User {
   createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
   deletedAt    DateTime?      @map("deleted_at") @db.Timestamptz(3)
+  dept         Dept?          @relation(fields: [deptId], references: [id], onDelete: SetNull)
   roles        UserRole[]
   refreshTokens RefreshToken[]
 
@@ -126,3 +126,23 @@ model RoleMenu {
   @@id([roleId, menuId])
   @@map("role_menus")
 }
+
+model Dept {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  parentId  String?   @map("parent_id") @db.Uuid
+  name      String    @db.VarChar(128)
+  status    Int       @default(1)
+  remark    String?   @db.VarChar(512)
+  sortOrder Int       @default(0) @map("sort_order")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
+  parent    Dept?     @relation("DeptTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children  Dept[]    @relation("DeptTree")
+  users     User[]
+
+  @@index([parentId])
+  @@index([status])
+  @@map("depts")
+}
+

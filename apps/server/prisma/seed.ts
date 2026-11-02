@@ -195,6 +195,13 @@ const USER_WRITE_CODES = [
   "System:User:Delete",
 ] as const;
 
+/** System Dept write codes — granted to super/admin only (not user/jack) */
+const DEPT_WRITE_CODES = [
+  "System:Dept:Create",
+  "System:Dept:Update",
+  "System:Dept:Delete",
+] as const;
+
 const SHARED_MENU_NAMES = new Set([
   "Dashboard",
   "Analytics",
@@ -395,6 +402,33 @@ async function main() {
   }
   console.log(`  ok user write perms for super/admin: ${USER_WRITE_CODES.join(", ")}`);
 
+  // Grant System Dept write permissions to super + admin only
+  const deptWriteRoleCodes = ["super", "admin"] as const;
+  for (const code of DEPT_WRITE_CODES) {
+    const perm = await prisma.permission.upsert({
+      where: { code },
+      update: { name: code },
+      create: { code, name: code },
+    });
+    for (const roleCode of deptWriteRoleCodes) {
+      const roleId = roleIds.get(roleCode);
+      if (!roleId) continue;
+      await prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: { roleId, permissionId: perm.id },
+        },
+        update: {},
+        create: { roleId, permissionId: perm.id },
+      });
+    }
+    const userRoleId = roleIds.get("user");
+    if (userRoleId) {
+      await prisma.rolePermission.deleteMany({
+        where: { roleId: userRoleId, permissionId: perm.id },
+      });
+    }
+  }
+  console.log(`  ok dept write perms for super/admin: ${DEPT_WRITE_CODES.join(", ")}`);
 
   const menuByName = new Map<string, string>();
   await upsertMenuTree(MENU_TREE, null, menuByName);
@@ -427,6 +461,45 @@ async function main() {
     }
     console.log(`  ok role_menus for ${roleCode}: ${names.size} nodes`);
   }
+
+
+  // Minimal dept tree
+  const rootDept = await prisma.dept.upsert({
+    where: { id: "00000000-0000-7000-8000-000000000001" },
+    update: { name: "总公司", status: 1, deletedAt: null, parentId: null },
+    create: {
+      id: "00000000-0000-7000-8000-000000000001",
+      name: "总公司",
+      status: 1,
+      remark: "seed root",
+      sortOrder: 0,
+    },
+  });
+  const childSpecs = [
+    { id: "00000000-0000-7000-8000-000000000011", name: "研发部", sortOrder: 1 },
+    { id: "00000000-0000-7000-8000-000000000012", name: "市场部", sortOrder: 2 },
+    { id: "00000000-0000-7000-8000-000000000013", name: "人事部", sortOrder: 3 },
+  ] as const;
+  for (const c of childSpecs) {
+    await prisma.dept.upsert({
+      where: { id: c.id },
+      update: {
+        name: c.name,
+        status: 1,
+        deletedAt: null,
+        parentId: rootDept.id,
+        sortOrder: c.sortOrder,
+      },
+      create: {
+        id: c.id,
+        name: c.name,
+        status: 1,
+        parentId: rootDept.id,
+        sortOrder: c.sortOrder,
+      },
+    });
+  }
+  console.log(`  ok depts: 总公司 + ${childSpecs.length} children`);
 
   console.log("Seed done. Change default passwords before production.");
 }
