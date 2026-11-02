@@ -65,7 +65,6 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v6
         with:
-          version: 11
           run_install: false
 
       - name: Setup Node 22

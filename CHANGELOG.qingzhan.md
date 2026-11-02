@@ -1,34 +1,27 @@
 # 青栈 Changelog
 
 > 本文件只记录 **青栈（Qingzhan）** 相对上游 Vben Admin 的后端与联调变更。  
-> 上游各包自带的 `CHANGELOG.md`（如 `apps/web-antd`、`packages/*`）**不要改写本文件、也不被本文件覆盖**。
+> 上游各包自带的 CHANGELOG.md（如 pps/web-antd、packages/*）**不要改写本文件、也不被本文件覆盖**。
 
 ## Unreleased
 
 ### Added
-- GitHub Actions：`.github/workflows/qingzhan-server-e2e.yml`（Compose PG16+Redis7、随机 JWT、server-only e2e）
-- `docs/qingzhan/open-source-checklist.md` 开源前检查清单
-
-### Fixed
-- Upload：`MulterModule.registerAsync` 经 `ConfigService` 读 `UPLOAD_MAX_BYTES`（避免装饰器求值时 env 未加载）
-- 技术方案 Redis 键名与实现对齐：`auth:fail:user:…` / `auth:fail:ip:…`
-- 文档明确 `THROTTLE_STORAGE=memory` 下无登录 Redis fail-closed；`auth:fail` 在 Redis 宕时 fail-open
-- e2e：Redis `eval` 失败时 login → 503（fail-closed）
-
-## [Unreleased]
-
-### Added
-
-- 登录失败锁定：`auth:fail:user:{username}` + `auth:fail:ip:{ip}`（`AUTH_FAIL_MAX` / `AUTH_FAIL_WINDOW_SEC`，默认 5 次 / 15min）→ HTTP **429**；成功登录清零用户名计数；审计 `auth.login_locked`
-- Upload **magic-bytes**（`file-type`）：真实类型须 ∈ 白名单，伪造 Content-Type → 400；multer `fileSize` 与 `UPLOAD_MAX_BYTES` 对齐
+- GitHub Actions：.github/workflows/qingzhan-server-e2e.yml（Compose PG16+Redis7、随机 JWT、server-only e2e）
+- docs/qingzhan/open-source-checklist.md 开源前检查清单
+- 登录失败锁定：uth:fail:user:{username} + uth:fail:ip:{ip}（AUTH_FAIL_MAX / AUTH_FAIL_WINDOW_SEC，默认 5 次 / 15min）→ HTTP **429**；成功登录清零用户名计数；审计 uth.login_locked
+- Upload **magic-bytes**（ile-type）：真实类型须 ∈ 白名单，伪造 Content-Type → 400；multer ileSize 与 UPLOAD_MAX_BYTES 对齐
 
 ### Changed
-
-- 登录 throttler Redis storage：**fail-closed**（Redis 不可用 → HTTP **503** `Rate limit unavailable`）；其它路由仍 fail-open + warn
+- 登录 throttler Redis storage：**fail-closed**（Redis 不可用 → HTTP **503** Rate limit unavailable）；其它路由仍 fail-open + warn
 - Known gaps：补 **SliderCaptcha** 阻碍 headless UI 登录 / 静默 refresh 自动化勾选；划掉本刀已清项
 
-### Security
+### Fixed
+- Upload：MulterModule.registerAsync 经 ConfigService 读 UPLOAD_MAX_BYTES（避免装饰器求值时 env 未加载）
+- 技术方案 Redis 键名与实现对齐：uth:fail:user:… / uth:fail:ip:…
+- 文档明确 THROTTLE_STORAGE=memory 下无登录 Redis fail-closed；uth:fail 在 Redis 宕时 fail-open
+- e2e：Redis val 失败时 login → 503（fail-closed）
 
+### Security
 - 凭证爆破：失败计数锁定与 IP QPS 限流互补
 - 上传内容嗅探，防 MZ/可执行体伪装 PNG 等
 
