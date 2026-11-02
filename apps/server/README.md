@@ -31,3 +31,19 @@ Swagger UI（非 production 默认开；生产设 `SWAGGER_ENABLED=true` 强制�
 - Health（live/ready）`@SkipThrottle`；Swagger `/api/docs` 在 Nest 管道外
 - 存储默认 **Redis**（`THROTTLE_STORAGE=redis`）；可改 `memory`（单机急救，生产建议 Redis）
 
+## E2E
+
+依赖本机 Compose（Postgres + Redis）与 pps/server/.env（含 seed 账号）。不要提交密钥。
+
+`ash
+# 仓库根
+docker compose up -d
+cd apps/server
+# 首次：migrate + seed
+pnpm exec prisma migrate deploy
+pnpm exec prisma db seed
+pnpm test:e2e
+# 或根目录：pnpm --dir apps/server test:e2e
+`
+
+覆盖：health live/ready、login（含错密）、Bearer user/info·codes·menu/all、Cookie refresh（纯字符串）、logout 清 cookie、无 token 401；可选 jack audit 403、upload 缺 file 400。套件内将 THROTTLE_STORAGE=memory 并抬高 limit，避免误伤。
