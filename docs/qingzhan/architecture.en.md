@@ -24,7 +24,7 @@ Primary deliverable: **`apps/server`** (`@qingzhan/server`) inside the monorepo.
 ## API conventions (summary)
 
 - **Dual prefix**: routes mount on both `/api` (mock-compatible) and `/api/v1`.
-- **Envelope**: `{ code, data, message, error }`; success when `code === 0`.
+- **Envelope**: `{ code, data, error, message }`; success when `code === 0`.
 - **Sole exception**: `POST /auth/refresh` returns a **raw accessToken string** (no envelope), matching the frontend `baseRequestClient`.
 - **Auth**: Bearer access for APIs; refresh/logout use Cookie `jwt` with CORS credentials.
 - **Never** include `password` on successful user payloads.
@@ -65,7 +65,7 @@ From repo root: `docker compose up -d`.
 ## Explicitly not done
 
 - S3 / MinIO object storage switch
-- BullMQ production job workers
+- BullMQ production job workers (not introduced yet)
 - Playwright (or similar) browser UI E2E; contract §11 UI checklist still open
 - Redis `auth:fail:{user|ip}` lockout (complementary to IP throttle)
 - OAuth / multi-tenant / full Clean Architecture

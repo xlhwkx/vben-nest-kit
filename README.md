@@ -32,6 +32,8 @@ vben-nest-kit/
 - 架构：[docs/qingzhan/architecture.md](docs/qingzhan/architecture.md) · English: [docs/qingzhan/architecture.en.md](docs/qingzhan/architecture.en.md)
 - 贡献：[docs/qingzhan/contributing.md](docs/qingzhan/contributing.md) · English: [docs/qingzhan/contributing.en.md](docs/qingzhan/contributing.en.md)
 - 索引：`docs/qingzhan/README.md`
+- 青栈 Changelog：[CHANGELOG.qingzhan.md](CHANGELOG.qingzhan.md)
+- v0.1 Release 草稿：[docs/qingzhan/release-notes-v0.1.md](docs/qingzhan/release-notes-v0.1.md)
 
 ## 后端（apps/server）快速开始
 

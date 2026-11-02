@@ -24,7 +24,7 @@
 ## API 约定（摘要）
 
 - **双前缀**：业务路由同时挂 `/api`（兼容 mock）与 `/api/v1`。
-- **信封**：`{ code, data, message, error }`；`code === 0` 成功。
+- **信封**：`{ code, data, error, message }`；`code === 0` 成功。
 - **唯一例外**：`POST /auth/refresh` 返回**纯 accessToken 字符串**（非信封），与前端 `baseRequestClient` 对齐。
 - **鉴权**：业务接口 Bearer access；refresh/logout 依赖 Cookie `jwt` + CORS credentials。
 - **禁止**：任何成功响应用户对象里带 `password`。
@@ -65,7 +65,7 @@
 ## 明确未做（勿当成已交付）
 
 - 对象存储（S3 / MinIO）切换
-- BullMQ / 异步任务队列骨架之外的生产任务
+- BullMQ 生产任务（尚未引入）
 - Playwright（或同类）浏览器 UI E2E；合同 §11 页面实跑仍记缺口
 - Redis `auth:fail:{user|ip}` 登录失败锁定（与 IP 限流互补，尚未做）
 - OAuth / 多租户 / 完整 Clean Architecture
