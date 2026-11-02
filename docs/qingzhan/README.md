@@ -7,6 +7,7 @@
 | 架构 | [architecture.md](./architecture.md) | [architecture.en.md](./architecture.en.md) |
 | 贡献指南 | [contributing.md](./contributing.md) | [contributing.en.md](./contributing.en.md) |
 | 生产部署 | [deploy.md](./deploy.md) | — |
+| 备份/迁移演练 | [backup-migrate.md](./backup-migrate.md) | — |
 | 可观测性 | [observability.md](./observability.md) | — |
 | v0.1 发版说明（草稿） | [release-notes-v0.1.md](./release-notes-v0.1.md) | same |
 | v0.2 发版说明（草稿） | [release-notes-v0.2.0.md](./release-notes-v0.2.0.md) | same |

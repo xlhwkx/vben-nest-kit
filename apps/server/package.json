@@ -21,7 +21,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed",
     "db:setup": "prisma migrate dev && prisma db seed",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "test:load:smoke": "node ../../scripts/qingzhan/load-smoke.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1161.0",

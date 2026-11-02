@@ -64,7 +64,8 @@
     "test:e2e": "turbo run test:e2e",
     "update:deps": "npx taze -r -w",
     "version": "pnpm exec changeset version && pnpm install --no-frozen-lockfile",
-    "catalog": "pnpm dlx codemod pnpm/catalog"
+    "catalog": "pnpm dlx codemod pnpm/catalog",
+    "test:load:smoke": "node scripts/qingzhan/load-smoke.mjs"
   },
   "dependencies": {
     "sortablejs": "catalog:"

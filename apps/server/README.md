@@ -51,3 +51,14 @@ pnpm test:e2e
 ```
 
 覆盖：health live/ready、login（含错密）、Bearer user/info·codes·menu/all、Cookie refresh（纯字符串）、logout 清 cookie、无 token 401；可选 jack audit 403、upload 缺 file 400。套件内将 THROTTLE_STORAGE=memory 并抬高 limit，避免误伤。
+
+## 压测烟测（企业稳态③）
+
+轻量本地脚本（无额外依赖；**不要**塞进默认 CI）：
+
+```bash
+# 仓库根；server 需已监听 APP_PORT（默认 5320）
+pnpm test:load:smoke
+```
+
+详见 `docs/qingzhan/backup-migrate.md` §6 与 `scripts/qingzhan/load-smoke.mjs` 头注释。

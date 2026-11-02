@@ -6,6 +6,8 @@
 ## Unreleased
 
 ### Added
+- 企业稳态③：`docs/qingzhan/backup-migrate.md`（pg_dump/restore、Prisma migrate 纪律、Redis 可重建、演练清单）；`scripts/qingzhan/load-smoke.mjs` + 根/`@qingzhan/server` script `test:load:smoke`（health+login 轻量烟测，CI 默认不跑）
+
 - 企业稳态②：`apps/server/Dockerfile`（Node 22 多阶段、非 root）+ `compose.prod.yml`；SIGTERM 优雅退出；生产 env fail-fast（占位 JWT / E2E bypass / 无 METRICS_TOKEN）；`docs/qingzhan/deploy.md`；Redis 连接失败日志改为 fail-closed 表述
 - 开源发版准备：`docs/qingzhan/open-source-checklist.md` 发布态勾选；`release-notes-v0.2.0.md`；`.github/workflows/qingzhan-release.yml`（`workflow_dispatch` + 默认 `if: false`，不改可见性、不真发 Release）
 - web-antd：`VITE_CAPTCHA_REQUIRED` 时 `getCaptchaApi` + login 提交 `captchaId`/`captchaToken`（默认关行为不变）

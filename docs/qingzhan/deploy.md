@@ -56,6 +56,18 @@ docker build -f apps/server/Dockerfile -t qingzhan-server:local .
 
 生产：**配 `METRICS_TOKEN` 或设 `METRICS_ENABLED=false`**。抓取仅内网 / sidecar。见 observability 文档。
 
+
+## 备份与迁移演练
+
+生产发版前至少在演练库跑一遍：`docs/qingzhan/backup-migrate.md`（`pg_dump`/`pg_restore`、Prisma `migrate deploy` 纪律、Redis 可重建说明、勾选清单）。
+
+压测烟测（本地，CI 默认不跑）：
+
+```bash
+pnpm test:load:smoke
+# BASE_URL=http://127.0.0.1:5320 SMOKE_WITH_UPLOAD=1 pnpm test:load:smoke
+```
+
 ## 与前端
 
 web-antd：`accessMode: backend`，代理/`VITE_GLOB_API_URL` 指到本服务的 `/api`。本刀不改仓库可见性、不打 GitHub Release。
