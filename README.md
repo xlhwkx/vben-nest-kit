@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs-site/public/logo.svg" width="96" height="96" alt="青栈 Qingzhan" />
+</p>
+
 # 青栈（vben-nest-kit）
 
 > **青栈** = 官方 [Vue Vben Admin](https://github.com/vbenjs/vue-vben-admin) 前端 monorepo + 自研 NestJS 后端（`apps/server`），用真实后端替换 `backend-mock`。
@@ -39,6 +43,8 @@ vben-nest-kit/
 - v0.1 Release 草稿：[docs/qingzhan/release-notes-v0.1.md](docs/qingzhan/release-notes-v0.1.md)
 - v0.2 Release 草稿：[docs/qingzhan/release-notes-v0.2.0.md](docs/qingzhan/release-notes-v0.2.0.md)
 - 开源检查清单（**Public / Release 须用户点头**）：[docs/qingzhan/open-source-checklist.md](docs/qingzhan/open-source-checklist.md)
+- **产品文档站（VitePress）**：[docs-site/](docs-site/) · 本地 `pnpm docs:dev` / `pnpm docs:build` · Pages：[.github/workflows/qingzhan-pages.yml](.github/workflows/qingzhan-pages.yml)（**Public 后** Settings → Pages → GitHub Actions）
+- Logo： [docs-site/public/logo.svg](docs-site/public/logo.svg)
 - 发版 workflow 草稿（默认 `if: false`）：`.github/workflows/qingzhan-release.yml`
 
 ## 后端（apps/server）快速开始

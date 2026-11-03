@@ -65,7 +65,10 @@
     "update:deps": "npx taze -r -w",
     "version": "pnpm exec changeset version && pnpm install --no-frozen-lockfile",
     "catalog": "pnpm dlx codemod pnpm/catalog",
-    "test:load:smoke": "node scripts/qingzhan/load-smoke.mjs"
+    "test:load:smoke": "node scripts/qingzhan/load-smoke.mjs",
+    "docs:dev": "pnpm -F @qingzhan/docs-site run dev",
+    "docs:build": "pnpm -F @qingzhan/docs-site run build",
+    "docs:preview": "pnpm -F @qingzhan/docs-site run preview"
   },
   "dependencies": {
     "sortablejs": "catalog:"

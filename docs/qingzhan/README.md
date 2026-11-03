@@ -26,3 +26,8 @@
 ## Changelog
 
 - 青栈变更：仓库根 [`CHANGELOG.qingzhan.md`](../../CHANGELOG.qingzhan.md)（不覆盖上游各包 CHANGELOG）
+
+
+## 产品文档站
+
+VitePress 站在仓库 [`docs-site/`](../../docs-site/)（复用本目录 Markdown）。本地：`pnpm docs:dev`。GitHub Pages 见 `docs-site/README.md`（**Public 后**启用）。Logo：[`logo.svg`](./logo.svg)。

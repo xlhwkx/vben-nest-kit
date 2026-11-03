@@ -43,6 +43,7 @@ description: 在扩展或二开青栈（vben-nest-kit）Nest 后端、新增域�
 - 前端联调：`apps/web-antd`（`VITE_NITRO_MOCK=false`，代理 `/api` → Nest `:5320`）。
 - Mock 对账：`apps/backend-mock` + `docs/qingzhan/mock-field-parity.md`（对齐行为，不抄缺陷）。
 - 运维文档：`docs/qingzhan/`。
+- 产品文档站：`docs-site/`（VitePress；`pnpm docs:dev`；Pages 须 Public 后启用，非开源硬门槛）。
 
 ## 3. 本地验证
 

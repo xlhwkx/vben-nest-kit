@@ -1,0 +1,16 @@
+{
+  "name": "@qingzhan/docs-site",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Qingzhan (青栈) product docs — VitePress site for GitHub Pages",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "vitepress": "catalog:",
+    "vue": "catalog:"
+  }
+}

@@ -37,7 +37,7 @@
 | 工作区 password/secret/api_key 命中 | 多为字段名、GitHub Actions secrets 引用、mock 硬编码占位、测试断言 — 非生产密钥 |
 | 轮换 | **git 侧无需轮换**（历史无真密钥）。上线生产仍须自备强 JWT/DB/Redis，禁沿用 example |
 
-> **官网 / VitePress**：独立文档站（GitHub Pages + VitePress）为 **另刀交付**；Pages 需仓库 **Public** 后对访客生效。仓内 `docs/qingzhan/` Markdown + README 已够开源首发，**官网不是开源硬门槛**。
+> **官网 / VitePress**：独立文档站（`docs-site/`，GitHub Pages + VitePress）为 **另刀交付**；Pages 需仓库 **Public** 后对访客生效。仓内 `docs/qingzhan/` Markdown + README 已够开源首发，**官网不是开源硬门槛**。
 
 ### C. 发版建议顺序
 

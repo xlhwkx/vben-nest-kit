@@ -1,0 +1,69 @@
+# Qingzhan docs site → GitHub Pages (VitePress)
+# Free for public repos. Enable: Settings → Pages → Source = GitHub Actions
+# AFTER the repository is Public (private Pages needs a paid plan).
+# Does NOT change repository visibility. No secrets required beyond GITHUB_TOKEN.
+name: Qingzhan Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs-site/**'
+      - 'docs/qingzhan/**'
+      - 'skills/qingzhan-backend/**'
+      - '.github/workflows/qingzhan-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: qingzhan-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # Install only what the docs-site needs when possible; fall back to filtered install
+      - name: Install docs-site deps
+        run: pnpm install --filter @qingzhan/docs-site...
+
+      - name: Build VitePress
+        run: pnpm docs:build
+        env:
+          QINGZHAN_DOCS_BASE: /vben-nest-kit/
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs-site/.vitepress/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    # Skip deploy quietly on private repos without Pages entitlement — build still validates.
+    # After Public + Pages enabled, this job publishes https://<user>.github.io/vben-nest-kit/
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

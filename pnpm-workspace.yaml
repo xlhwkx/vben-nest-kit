@@ -11,6 +11,7 @@ packages:
   - apps/*
   - scripts/*
   - docs
+  - docs-site
   - playground
 
 publicHoistPattern:
