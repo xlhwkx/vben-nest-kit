@@ -1,8 +1,7 @@
-# 青栈 v0.2.0 Release Notes（草稿）
+# 青栈 v0.2.0 Release Notes
 
-> 变更明细见 [`CHANGELOG.qingzhan.md`](../../CHANGELOG.qingzhan.md) **Unreleased**。  
-> **未打 tag、未创建 GitHub Release**。公开仓 / Release 须用户点头。  
-> 建议 tag：`v0.2.0`（仅在用户确认后由人工或启用 `qingzhan-release.yml`）。
+> 变更明细见 [CHANGELOG.qingzhan.md](../../CHANGELOG.qingzhan.md)。
+> **已发布**：tag 0.2.0 → https://github.com/xlhwkx/vben-nest-kit/releases/tag/v0.2.0 （SHA 8dcce2，2026-11-03 Asia/Singapore）。
 
 ## 中文（短）
 

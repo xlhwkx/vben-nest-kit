@@ -23,8 +23,8 @@
 - [x] **敏感扫描**：`git grep -iE 'password|secret|api[_-]?key' -- ':!.env.example' ':!apps/server/.env.example' ':!规则' ':!docs' ':!**/seed.ts'`
 - [x] **README 徽章**：按需加 CI badge（仅指向已对访客可见的检查）
 - [x] **LICENSE / 第三方归属**：确认上游 Vben 说明仍可发现（`README.vben.md`）
-- [ ] **仓库可见性 → Public**：须仓库所有者确认（开发/审查机器人不擅自改）
-- [ ] **GitHub Release**：创建 Release / 上传 notes 须用户点头（可用草稿 notes，勿自动 publish）
+- [x] **仓库可见性 → Public**：已于 2026-11-03（Asia/Singapore）改为 Public（`https://github.com/xlhwkx/vben-nest-kit`）
+- [x] **GitHub Release**：`v0.2.0` 已发布 → https://github.com/xlhwkx/vben-nest-kit/releases/tag/v0.2.0 （tag SHA `e8dcce2`）
 
 #### B 自扫结论（2026-11-03，Asia/Singapore）
 
@@ -44,7 +44,7 @@
 1. 勾完 **B** 敏感项
 2. 用户明确说「改 Public」→ 再改可见性
 3. 用户明确说「打 Release / 发 vX.Y.Z」→ 再 `gh release create` 或启用 `qingzhan-release.yml` 的 publish 输入
-4. 默认保持 private + 无 GitHub Release
+4. ~~默认保持 private + 无 GitHub Release~~ → **v0.2.0 已完成 Public + Release**（后续发版仍须点头）
 
 ## 已知缺口（公开说明即可，勿写成已交付）
 
