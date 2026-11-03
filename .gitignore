@@ -99,3 +99,7 @@ uploads/
 
 apps/server/.docker-build.log
 
+
+# local DB dumps / backup drills (qingzhan)
+backups/
+*.dump

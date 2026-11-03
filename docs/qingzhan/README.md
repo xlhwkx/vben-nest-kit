@@ -12,6 +12,7 @@
 | v0.1 发版说明（草稿） | [release-notes-v0.1.md](./release-notes-v0.1.md) | same |
 | v0.2 发版说明（草稿） | [release-notes-v0.2.0.md](./release-notes-v0.2.0.md) | same |
 | 开源检查清单 | [open-source-checklist.md](./open-source-checklist.md) | EN summary in-page |
+| 智能体二开 skill | [../../skills/qingzhan-backend/SKILL.md](../../skills/qingzhan-backend/SKILL.md) | — |
 
 ## 真源（勿搬迁）
 
