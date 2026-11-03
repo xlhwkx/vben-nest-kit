@@ -39,9 +39,9 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      # Install only what the docs-site needs when possible; fall back to filtered install
-      - name: Install docs-site deps
-        run: pnpm install --filter @qingzhan/docs-site...
+      # Full install: filtered install still runs root postinstall stubs and misses node-utils deps
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
 
       - name: Build VitePress
         run: pnpm docs:build
