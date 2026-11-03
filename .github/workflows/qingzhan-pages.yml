@@ -26,6 +26,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # prisma generate in apps/server postinstall needs the var; no live DB required
+      DATABASE_URL: postgresql://qingzhan:qingzhan@127.0.0.1:5432/qingzhan?schema=public
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,7 +42,7 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      # Full install: filtered install still runs root postinstall stubs and misses node-utils deps
+      # Full install: filtered install misses stub deps; DATABASE_URL satisfies prisma generate
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
@@ -59,8 +62,7 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    # Skip deploy quietly on private repos without Pages entitlement — build still validates.
-    # After Public + Pages enabled, this job publishes https://<user>.github.io/vben-nest-kit/
+    # After Public + Pages enabled, publishes https://<user>.github.io/vben-nest-kit/
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
