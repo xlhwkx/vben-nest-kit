@@ -2,7 +2,10 @@
 
 > **青栈** = 官方 [Vue Vben Admin](https://github.com/vbenjs/vue-vben-admin) 前端 monorepo + 自研 NestJS 后端（`apps/server`），用真实后端替换 `backend-mock`。
 
-许可证：**MIT**（与 Vben / Nest 生态一致）。
+[![Qingzhan server e2e](https://github.com/xlhwkx/vben-nest-kit/actions/workflows/qingzhan-server-e2e.yml/badge.svg)](https://github.com/xlhwkx/vben-nest-kit/actions/workflows/qingzhan-server-e2e.yml)
+[![license](https://img.shields.io/github/license/xlhwkx/vben-nest-kit.svg)](LICENSE)
+
+许可证：**MIT**（根 `LICENSE` 保留上游 Vben 版权声明）。上游说明：[README.vben.md](README.vben.md) / [README.zh-CN.md](README.zh-CN.md)（官方仓库 [vbenjs/vue-vben-admin](https://github.com/vbenjs/vue-vben-admin)）。
 
 ## 目录结构
 

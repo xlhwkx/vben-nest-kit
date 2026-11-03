@@ -89,8 +89,9 @@ description: 在扩展或二开青栈（vben-nest-kit）Nest 后端、新增域�
 2. 按清单跑敏感 `git grep`；结果给人看。
 3. CI badge（仅访客可见检查）、Vben 归属（`README.vben.md`）可发现。
 4. **Public** 与 **GitHub Release**：须用户明确说「改 Public」「打 Release / 发 vX.Y.Z」；禁止擅自改可见性或 `gh release create`；`qingzhan-release.yml` 默认保持禁用逻辑。
+5. **官网 / VitePress**：独立站为另刀；GitHub Pages 须 Public 后启用。仓内 `docs/qingzhan/` 已够首发，**官网不是开源硬门槛**。
 
-顺序：勾完 B 敏感项 → Public → Release。
+顺序：勾完 B 敏感项 → Public → Release（官网可并行起草，不挡 B/Public）。
 
 ## 9. 验收自检
 
