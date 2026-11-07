@@ -23,13 +23,14 @@ export namespace SystemMenuApi {
   ] as const;
   /** 系统菜单 */
   export interface SystemMenu {
+    version: number;
     [key: string]: any;
     /** 后端权限标识 */
-    authCode: string;
+    authCode?: null | string;
     /** 子级 */
     children?: SystemMenu[];
     /** 组件 */
-    component?: string;
+    component?: null | string;
     /** 菜单ID */
     id: string;
     /** 菜单元数据 */
@@ -82,9 +83,9 @@ export namespace SystemMenuApi {
     /** 路由路径 */
     path: string;
     /** 父级ID */
-    pid: string;
+    pid?: null | string;
     /** 重定向 */
-    redirect?: string;
+    redirect?: null | string;
     /** 菜单类型 */
     type: (typeof MenuTypes)[number];
   }
@@ -122,9 +123,9 @@ async function isMenuPathExists(
  * @param data 菜单数据
  */
 async function createMenu(
-  data: Omit<SystemMenuApi.SystemMenu, 'children' | 'id'>,
+  data: Omit<SystemMenuApi.SystemMenu, 'children' | 'id' | 'version'>,
 ) {
-  return requestClient.post('/system/menu', data);
+  return requestClient.post<SystemMenuApi.SystemMenu>('/system/menu', data);
 }
 
 /**
@@ -135,9 +136,12 @@ async function createMenu(
  */
 async function updateMenu(
   id: string,
-  data: Omit<SystemMenuApi.SystemMenu, 'children' | 'id'>,
+  data: Omit<SystemMenuApi.SystemMenu, 'children' | 'id'> & { version: number },
 ) {
-  return requestClient.put(`/system/menu/${id}`, data);
+  return requestClient.put<SystemMenuApi.SystemMenu>(
+    `/system/menu/${id}`,
+    data,
+  );
 }
 
 /**

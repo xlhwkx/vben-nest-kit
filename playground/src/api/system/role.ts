@@ -4,6 +4,7 @@ import { requestClient } from '#/api/request';
 
 export namespace SystemRoleApi {
   export interface SystemRole {
+    version: number;
     [key: string]: any;
     id: string;
     name: string;
@@ -17,18 +18,32 @@ export namespace SystemRoleApi {
  * 获取角色列表数据
  */
 async function getRoleList(params: Recordable<any>) {
-  return requestClient.get<Array<SystemRoleApi.SystemRole>>(
-    '/system/role/list',
-    { params },
-  );
+  return requestClient.get<{
+    items: SystemRoleApi.SystemRole[];
+    total: number;
+  }>('/system/role/list', { params });
+}
+
+/** Load role choices within the API's 100-row page limit. */
+async function getRoleOptions() {
+  const roles: SystemRoleApi.SystemRole[] = [];
+  for (let page = 1; ; page++) {
+    const { items, total } = await getRoleList({ page, pageSize: 100 });
+    roles.push(...items);
+    if (roles.length >= total) return roles;
+    if (items.length === 0)
+      throw new Error('Role options response is incomplete');
+  }
 }
 
 /**
  * 创建角色
  * @param data 角色数据
  */
-async function createRole(data: Omit<SystemRoleApi.SystemRole, 'id'>) {
-  return requestClient.post('/system/role', data);
+async function createRole(
+  data: Omit<SystemRoleApi.SystemRole, 'id' | 'version'>,
+) {
+  return requestClient.post<SystemRoleApi.SystemRole>('/system/role', data);
 }
 
 /**
@@ -39,9 +54,14 @@ async function createRole(data: Omit<SystemRoleApi.SystemRole, 'id'>) {
  */
 async function updateRole(
   id: string,
-  data: Omit<SystemRoleApi.SystemRole, 'id'>,
+  data: Partial<Omit<SystemRoleApi.SystemRole, 'id' | 'version'>> & {
+    version: number;
+  },
 ) {
-  return requestClient.put(`/system/role/${id}`, data);
+  return requestClient.put<SystemRoleApi.SystemRole>(
+    `/system/role/${id}`,
+    data,
+  );
 }
 
 /**
@@ -52,4 +72,4 @@ async function deleteRole(id: string) {
   return requestClient.delete(`/system/role/${id}`);
 }
 
-export { createRole, deleteRole, getRoleList, updateRole };
+export { createRole, deleteRole, getRoleList, getRoleOptions, updateRole };

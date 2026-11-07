@@ -1,7 +1,10 @@
-import "dotenv/config";
-import * as argon2 from "argon2";
-import { PrismaClient } from "../src/generated/prisma/client.js";
-import { PrismaPg } from "@prisma/adapter-pg";
+import 'dotenv/config';
+import { SYSTEM_PERMISSION_CODES } from '../src/common/authorization/permission-codes.js';
+import { provisionAdminRoutes } from '../src/common/authorization/admin-routes.js';
+import * as argon2 from 'argon2';
+import { PrismaClient } from '../src/generated/prisma/client.js';
+import type { Prisma } from '../src/generated/prisma/client.js';
+import { PrismaPg } from '@prisma/adapter-pg';
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL as string,
@@ -11,39 +14,39 @@ const prisma = new PrismaClient({ adapter });
 /** Demo accounts aligned with api-contract-vben.md §4.1 */
 const DEMO_USERS = [
   {
-    username: "vben",
-    password: "123456",
-    realName: "Vben",
-    homePath: "/dashboard/workspace",
-    roleCode: "super",
-    codes: ["AC_100100", "AC_100110", "AC_100120", "AC_100010"],
+    username: 'vben',
+    password: '123456',
+    realName: 'Vben',
+    homePath: '/dashboard/workspace',
+    roleCode: 'super',
+    codes: ['AC_100100', 'AC_100110', 'AC_100120', 'AC_100010'],
   },
   {
-    username: "admin",
-    password: "123456",
-    realName: "Admin",
-    homePath: "/dashboard/workspace",
-    roleCode: "admin",
-    codes: ["AC_100010", "AC_100020", "AC_100030"],
+    username: 'admin',
+    password: '123456',
+    realName: 'Admin',
+    homePath: '/dashboard/workspace',
+    roleCode: 'admin',
+    codes: ['AC_100010', 'AC_100020', 'AC_100030'],
   },
   {
-    username: "jack",
-    password: "123456",
-    realName: "Jack",
-    homePath: "/dashboard/analytics",
-    roleCode: "user",
-    codes: ["AC_1000001", "AC_1000002"],
+    username: 'jack',
+    password: '123456',
+    realName: 'Jack',
+    homePath: '/dashboard/analytics',
+    roleCode: 'user',
+    codes: ['AC_1000001', 'AC_1000002'],
   },
 ] as const;
 
 type MenuSeed = {
   name: string;
   path: string;
-  type: "catalog" | "menu" | "button" | "embedded" | "link";
+  type: 'catalog' | 'menu' | 'button' | 'embedded' | 'link';
   component?: string;
   redirect?: string;
   authCode?: string;
-  meta?: Record<string, unknown>;
+  meta?: Prisma.InputJsonObject;
   sortOrder?: number;
   children?: MenuSeed[];
 };
@@ -51,120 +54,120 @@ type MenuSeed = {
 /** Route tree aligned with backend-mock MOCK_MENUS / createDemosMenus */
 const MENU_TREE: MenuSeed[] = [
   {
-    name: "Dashboard",
-    path: "/dashboard",
-    type: "catalog",
-    redirect: "/dashboard/analytics",
-    meta: { order: -1, title: "page.dashboard.title" },
+    name: 'Dashboard',
+    path: '/dashboard',
+    type: 'catalog',
+    redirect: '/dashboard/analytics',
+    meta: { order: -1, title: 'page.dashboard.title' },
     sortOrder: -1,
     children: [
       {
-        name: "Analytics",
-        path: "analytics",
-        type: "menu",
-        component: "/dashboard/analytics/index",
-        meta: { affixTab: true, title: "page.dashboard.analytics" },
+        name: 'Analytics',
+        path: 'analytics',
+        type: 'menu',
+        component: '/dashboard/analytics/index',
+        meta: { affixTab: true, title: 'page.dashboard.analytics' },
         sortOrder: 0,
       },
       {
-        name: "Workspace",
-        path: "workspace",
-        type: "menu",
-        component: "/dashboard/workspace/index",
-        meta: { title: "page.dashboard.workspace" },
+        name: 'Workspace',
+        path: 'workspace',
+        type: 'menu',
+        component: '/dashboard/workspace/index',
+        meta: { title: 'page.dashboard.workspace' },
         sortOrder: 1,
       },
     ],
   },
   {
-    name: "Demos",
-    path: "/demos",
-    type: "catalog",
-    redirect: "/demos/access",
+    name: 'Demos',
+    path: '/demos',
+    type: 'catalog',
+    redirect: '/demos/access',
     meta: {
-      icon: "ic:baseline-view-in-ar",
+      icon: 'ic:baseline-view-in-ar',
       keepAlive: true,
       order: 1000,
-      title: "demos.title",
+      title: 'demos.title',
     },
     sortOrder: 1000,
     children: [
       {
-        name: "AccessDemos",
-        path: "access",
-        type: "catalog",
-        redirect: "/demos/access/page-control",
+        name: 'AccessDemos',
+        path: 'access',
+        type: 'catalog',
+        redirect: '/demos/access/page-control',
         meta: {
-          icon: "mdi:cloud-key-outline",
-          title: "demos.access.backendPermissions",
+          icon: 'mdi:cloud-key-outline',
+          title: 'demos.access.backendPermissions',
         },
         sortOrder: 0,
         children: [
           {
-            name: "AccessPageControlDemo",
-            path: "page-control",
-            type: "menu",
-            component: "/demos/access/index",
+            name: 'AccessPageControlDemo',
+            path: 'page-control',
+            type: 'menu',
+            component: '/demos/access/index',
             meta: {
-              icon: "mdi:page-previous-outline",
-              title: "demos.access.pageAccess",
+              icon: 'mdi:page-previous-outline',
+              title: 'demos.access.pageAccess',
             },
             sortOrder: 0,
           },
           {
-            name: "AccessButtonControlDemo",
-            path: "button-control",
-            type: "menu",
-            component: "/demos/access/button-control",
+            name: 'AccessButtonControlDemo',
+            path: 'button-control',
+            type: 'menu',
+            component: '/demos/access/button-control',
             meta: {
-              icon: "mdi:button-cursor",
-              title: "demos.access.buttonControl",
+              icon: 'mdi:button-cursor',
+              title: 'demos.access.buttonControl',
             },
             sortOrder: 1,
           },
           {
-            name: "AccessMenuVisible403Demo",
-            path: "menu-visible-403",
-            type: "menu",
-            component: "/demos/access/menu-visible-403",
+            name: 'AccessMenuVisible403Demo',
+            path: 'menu-visible-403',
+            type: 'menu',
+            component: '/demos/access/menu-visible-403',
             meta: {
-              authority: ["no-body"],
-              icon: "mdi:button-cursor",
+              authority: ['no-body'],
+              icon: 'mdi:button-cursor',
               menuVisibleWithForbidden: true,
-              title: "demos.access.menuVisible403",
+              title: 'demos.access.menuVisible403',
             },
             sortOrder: 2,
           },
           {
-            name: "AccessSuperVisibleDemo",
-            path: "super-visible",
-            type: "menu",
-            component: "/demos/access/super-visible",
+            name: 'AccessSuperVisibleDemo',
+            path: 'super-visible',
+            type: 'menu',
+            component: '/demos/access/super-visible',
             meta: {
-              icon: "mdi:button-cursor",
-              title: "demos.access.superVisible",
+              icon: 'mdi:button-cursor',
+              title: 'demos.access.superVisible',
             },
             sortOrder: 3,
           },
           {
-            name: "AccessAdminVisibleDemo",
-            path: "admin-visible",
-            type: "menu",
-            component: "/demos/access/admin-visible",
+            name: 'AccessAdminVisibleDemo',
+            path: 'admin-visible',
+            type: 'menu',
+            component: '/demos/access/admin-visible',
             meta: {
-              icon: "mdi:button-cursor",
-              title: "demos.access.adminVisible",
+              icon: 'mdi:button-cursor',
+              title: 'demos.access.adminVisible',
             },
             sortOrder: 4,
           },
           {
-            name: "AccessUserVisibleDemo",
-            path: "user-visible",
-            type: "menu",
-            component: "/demos/access/user-visible",
+            name: 'AccessUserVisibleDemo',
+            path: 'user-visible',
+            type: 'menu',
+            component: '/demos/access/user-visible',
             meta: {
-              icon: "mdi:button-cursor",
-              title: "demos.access.userVisible",
+              icon: 'mdi:button-cursor',
+              title: 'demos.access.userVisible',
             },
             sortOrder: 5,
           },
@@ -176,57 +179,57 @@ const MENU_TREE: MenuSeed[] = [
 
 /** System Menu write codes — granted to super/admin only (not user/jack) */
 const MENU_WRITE_CODES = [
-  "System:Menu:Create",
-  "System:Menu:Update",
-  "System:Menu:Delete",
+  'System:Menu:Create',
+  'System:Menu:Update',
+  'System:Menu:Delete',
 ] as const;
 
 /** System Role write codes — granted to super/admin only (not user/jack) */
 const ROLE_WRITE_CODES = [
-  "System:Role:Create",
-  "System:Role:Update",
-  "System:Role:Delete",
+  'System:Role:Create',
+  'System:Role:Update',
+  'System:Role:Delete',
 ] as const;
 
 /** System User write codes — granted to super/admin only (not user/jack) */
 const USER_WRITE_CODES = [
-  "System:User:Create",
-  "System:User:Update",
-  "System:User:Delete",
+  'System:User:Create',
+  'System:User:Update',
+  'System:User:Delete',
 ] as const;
 
 /** System Dept write codes — granted to super/admin only (not user/jack) */
 const DEPT_WRITE_CODES = [
-  "System:Dept:Create",
-  "System:Dept:Update",
-  "System:Dept:Delete",
+  'System:Dept:Create',
+  'System:Dept:Update',
+  'System:Dept:Delete',
 ] as const;
 
 /** System Dict write codes — granted to super/admin only (not user/jack) */
 const DICT_WRITE_CODES = [
-  "System:Dict:Create",
-  "System:Dict:Update",
-  "System:Dict:Delete",
+  'System:Dict:Create',
+  'System:Dict:Update',
+  'System:Dict:Delete',
 ] as const;
 
 /** System Audit list - granted to super/admin only (not user/jack) */
-const AUDIT_LIST_CODES = ["System:Audit:List"] as const;
+const AUDIT_LIST_CODES = ['System:Audit:List'] as const;
 
 const SHARED_MENU_NAMES = new Set([
-  "Dashboard",
-  "Analytics",
-  "Workspace",
-  "Demos",
-  "AccessDemos",
-  "AccessPageControlDemo",
-  "AccessButtonControlDemo",
-  "AccessMenuVisible403Demo",
+  'Dashboard',
+  'Analytics',
+  'Workspace',
+  'Demos',
+  'AccessDemos',
+  'AccessPageControlDemo',
+  'AccessButtonControlDemo',
+  'AccessMenuVisible403Demo',
 ]);
 
 const ROLE_EXTRA_MENUS: Record<string, string[]> = {
-  super: ["AccessSuperVisibleDemo"],
-  admin: ["AccessAdminVisibleDemo"],
-  user: ["AccessUserVisibleDemo"],
+  super: ['AccessSuperVisibleDemo'],
+  admin: ['AccessAdminVisibleDemo'],
+  user: ['AccessUserVisibleDemo'],
 };
 
 async function upsertMenuTree(
@@ -235,7 +238,9 @@ async function upsertMenuTree(
   byName: Map<string, string>,
 ) {
   for (const node of nodes) {
-    const existing = await prisma.menu.findUnique({ where: { name: node.name } });
+    const existing = await prisma.menu.findUnique({
+      where: { name: node.name },
+    });
     const data = {
       parentId,
       path: node.path,
@@ -259,7 +264,12 @@ async function upsertMenuTree(
 }
 
 async function main() {
-  console.log("Seeding qingzhan demo users/roles/permissions/menus…");
+  if (process.env.NODE_ENV === 'production' || process.env.ALLOW_DEMO_SEED !== 'true') {
+    throw new Error(
+      'Demo seed is forbidden in production and requires ALLOW_DEMO_SEED=true in development/test. Use bootstrap:admin for a fresh production database.',
+    );
+  }
+  console.log('Seeding qingzhan demo users/roles/permissions/menus…');
 
   const roleIds = new Map<string, string>();
 
@@ -300,13 +310,8 @@ async function main() {
 
     const user = await prisma.user.upsert({
       where: { username: demo.username },
-      update: {
-        passwordHash,
-        realName: demo.realName,
-        homePath: demo.homePath,
-        status: 1,
-        deletedAt: null,
-      },
+      update: {}, // Never reset an existing account's password/status/deletion state.
+
       create: {
         username: demo.username,
         passwordHash,
@@ -324,11 +329,11 @@ async function main() {
       create: { userId: user.id, roleId: role.id },
     });
 
-    console.log(`  ok ${demo.username} / ${demo.password} -> role=${demo.roleCode}`);
+    console.log(`  ok ${demo.username} -> role=${demo.roleCode}`);
   }
 
   // Grant System Menu write permissions to super + admin only
-  const menuWriteRoleCodes = ["super", "admin"] as const;
+  const menuWriteRoleCodes = ['super', 'admin'] as const;
   for (const code of MENU_WRITE_CODES) {
     const perm = await prisma.permission.upsert({
       where: { code },
@@ -347,17 +352,17 @@ async function main() {
       });
     }
     // Ensure user role does NOT have menu write codes
-    const userRoleId = roleIds.get("user");
+    const userRoleId = roleIds.get('user');
     if (userRoleId) {
       await prisma.rolePermission.deleteMany({
         where: { roleId: userRoleId, permissionId: perm.id },
       });
     }
   }
-  console.log(`  ok menu write perms for super/admin: ${MENU_WRITE_CODES.join(", ")}`);
+  console.log(`  ok menu write perms for super/admin: ${MENU_WRITE_CODES.join(', ')}`);
 
   // Grant System Role write permissions to super + admin only
-  const roleWriteRoleCodes = ["super", "admin"] as const;
+  const roleWriteRoleCodes = ['super', 'admin'] as const;
   for (const code of ROLE_WRITE_CODES) {
     const perm = await prisma.permission.upsert({
       where: { code },
@@ -375,17 +380,17 @@ async function main() {
         create: { roleId, permissionId: perm.id },
       });
     }
-    const userRoleId = roleIds.get("user");
+    const userRoleId = roleIds.get('user');
     if (userRoleId) {
       await prisma.rolePermission.deleteMany({
         where: { roleId: userRoleId, permissionId: perm.id },
       });
     }
   }
-  console.log(`  ok role write perms for super/admin: ${ROLE_WRITE_CODES.join(", ")}`);
+  console.log(`  ok role write perms for super/admin: ${ROLE_WRITE_CODES.join(', ')}`);
 
   // Grant System User write permissions to super + admin only
-  const userWriteRoleCodes = ["super", "admin"] as const;
+  const userWriteRoleCodes = ['super', 'admin'] as const;
   for (const code of USER_WRITE_CODES) {
     const perm = await prisma.permission.upsert({
       where: { code },
@@ -403,17 +408,17 @@ async function main() {
         create: { roleId, permissionId: perm.id },
       });
     }
-    const userRoleId = roleIds.get("user");
+    const userRoleId = roleIds.get('user');
     if (userRoleId) {
       await prisma.rolePermission.deleteMany({
         where: { roleId: userRoleId, permissionId: perm.id },
       });
     }
   }
-  console.log(`  ok user write perms for super/admin: ${USER_WRITE_CODES.join(", ")}`);
+  console.log(`  ok user write perms for super/admin: ${USER_WRITE_CODES.join(', ')}`);
 
   // Grant System Dept write permissions to super + admin only
-  const deptWriteRoleCodes = ["super", "admin"] as const;
+  const deptWriteRoleCodes = ['super', 'admin'] as const;
   for (const code of DEPT_WRITE_CODES) {
     const perm = await prisma.permission.upsert({
       where: { code },
@@ -431,17 +436,17 @@ async function main() {
         create: { roleId, permissionId: perm.id },
       });
     }
-    const userRoleId = roleIds.get("user");
+    const userRoleId = roleIds.get('user');
     if (userRoleId) {
       await prisma.rolePermission.deleteMany({
         where: { roleId: userRoleId, permissionId: perm.id },
       });
     }
   }
-  console.log(`  ok dept write perms for super/admin: ${DEPT_WRITE_CODES.join(", ")}`);
+  console.log(`  ok dept write perms for super/admin: ${DEPT_WRITE_CODES.join(', ')}`);
 
   // Grant System Dict write permissions to super + admin only
-  const dictWriteRoleCodes = ["super", "admin"] as const;
+  const dictWriteRoleCodes = ['super', 'admin'] as const;
   for (const code of DICT_WRITE_CODES) {
     const perm = await prisma.permission.upsert({
       where: { code },
@@ -459,17 +464,17 @@ async function main() {
         create: { roleId, permissionId: perm.id },
       });
     }
-    const userRoleId = roleIds.get("user");
+    const userRoleId = roleIds.get('user');
     if (userRoleId) {
       await prisma.rolePermission.deleteMany({
         where: { roleId: userRoleId, permissionId: perm.id },
       });
     }
   }
-  console.log(`  ok dict write perms for super/admin: ${DICT_WRITE_CODES.join(", ")}`);
+  console.log(`  ok dict write perms for super/admin: ${DICT_WRITE_CODES.join(', ')}`);
 
   // Grant System Audit list to super + admin only
-  const auditListRoleCodes = ["super", "admin"] as const;
+  const auditListRoleCodes = ['super', 'admin'] as const;
   for (const code of AUDIT_LIST_CODES) {
     const perm = await prisma.permission.upsert({
       where: { code },
@@ -487,24 +492,21 @@ async function main() {
         create: { roleId, permissionId: perm.id },
       });
     }
-    const userRoleId = roleIds.get("user");
+    const userRoleId = roleIds.get('user');
     if (userRoleId) {
       await prisma.rolePermission.deleteMany({
         where: { roleId: userRoleId, permissionId: perm.id },
       });
     }
   }
-  console.log(`  ok audit list perms for super/admin: ${AUDIT_LIST_CODES.join(", ")}`);
+  console.log(`  ok audit list perms for super/admin: ${AUDIT_LIST_CODES.join(', ')}`);
 
   const menuByName = new Map<string, string>();
   await upsertMenuTree(MENU_TREE, null, menuByName);
   console.log(`  ok menus upserted: ${menuByName.size}`);
 
   for (const [roleCode, roleId] of roleIds) {
-    const names = new Set([
-      ...SHARED_MENU_NAMES,
-      ...(ROLE_EXTRA_MENUS[roleCode] ?? []),
-    ]);
+    const names = new Set([...SHARED_MENU_NAMES, ...(ROLE_EXTRA_MENUS[roleCode] ?? [])]);
     for (const name of names) {
       const menuId = menuByName.get(name);
       if (!menuId) continue;
@@ -515,9 +517,9 @@ async function main() {
       });
     }
     const allRoleLeaves = [
-      "AccessSuperVisibleDemo",
-      "AccessAdminVisibleDemo",
-      "AccessUserVisibleDemo",
+      'AccessSuperVisibleDemo',
+      'AccessAdminVisibleDemo',
+      'AccessUserVisibleDemo',
     ];
     for (const leaf of allRoleLeaves) {
       if (names.has(leaf)) continue;
@@ -528,23 +530,83 @@ async function main() {
     console.log(`  ok role_menus for ${roleCode}: ${names.size} nodes`);
   }
 
+  // Fresh installs run migrations before seeding, so materialize legacy grants here too.
+  for (const code of SYSTEM_PERMISSION_CODES) {
+    const permission = await prisma.permission.upsert({
+      where: { code },
+      update: {},
+      create: { code, name: code },
+    });
+    for (const roleCode of ['super', 'admin']) {
+      const roleId = roleIds.get(roleCode)!;
+      await prisma.rolePermission.upsert({
+        where: { roleId_permissionId: { roleId, permissionId: permission.id } },
+        update: {},
+        create: { roleId, permissionId: permission.id },
+      });
+    }
+  }
+  const permissions = await prisma.permission.findMany({
+    include: { roles: true },
+  });
+  for (const permission of permissions) {
+    let menu = await prisma.menu.findFirst({
+      where: { authCode: permission.code, deletedAt: null },
+    });
+    if (!menu) {
+      menu = await prisma.menu.create({
+        data: {
+          name: `SeedPermission_${permission.id}`,
+          path: '',
+          type: 'button',
+          authCode: permission.code,
+          meta: { title: permission.code, hideInMenu: true },
+        },
+      });
+    }
+    for (const { roleId } of permission.roles) {
+      await prisma.roleMenu.upsert({
+        where: { roleId_menuId: { roleId, menuId: menu.id } },
+        update: {},
+        create: { roleId, menuId: menu.id },
+      });
+    }
+  }
+
+  // Management pages belong only to the administrator roles.
+  for (const roleCode of ['super', 'admin']) {
+    const roleId = roleIds.get(roleCode)!;
+    await prisma.$transaction((tx) => provisionAdminRoutes(tx, roleId));
+  }
 
   // Minimal dept tree
   const rootDept = await prisma.dept.upsert({
-    where: { id: "00000000-0000-7000-8000-000000000001" },
-    update: { name: "总公司", status: 1, deletedAt: null, parentId: null },
+    where: { id: '00000000-0000-7000-8000-000000000001' },
+    update: { name: '总公司', status: 1, deletedAt: null, parentId: null },
     create: {
-      id: "00000000-0000-7000-8000-000000000001",
-      name: "总公司",
+      id: '00000000-0000-7000-8000-000000000001',
+      name: '总公司',
       status: 1,
-      remark: "seed root",
+      remark: 'seed root',
       sortOrder: 0,
     },
   });
   const childSpecs = [
-    { id: "00000000-0000-7000-8000-000000000011", name: "研发部", sortOrder: 1 },
-    { id: "00000000-0000-7000-8000-000000000012", name: "市场部", sortOrder: 2 },
-    { id: "00000000-0000-7000-8000-000000000013", name: "人事部", sortOrder: 3 },
+    {
+      id: '00000000-0000-7000-8000-000000000011',
+      name: '研发部',
+      sortOrder: 1,
+    },
+    {
+      id: '00000000-0000-7000-8000-000000000012',
+      name: '市场部',
+      sortOrder: 2,
+    },
+    {
+      id: '00000000-0000-7000-8000-000000000013',
+      name: '人事部',
+      sortOrder: 3,
+    },
   ] as const;
   for (const c of childSpecs) {
     await prisma.dept.upsert({
@@ -570,31 +632,31 @@ async function main() {
   // Minimal dict types + items (aligned with backend-mock)
   const dictSpecs = [
     {
-      code: "user_gender",
-      name: "用户性别",
-      remark: "用户性别字典",
+      code: 'user_gender',
+      name: '用户性别',
+      remark: '用户性别字典',
       items: [
-        { label: "男", value: 1, sort: 1 },
-        { label: "女", value: 0, sort: 2 },
-        { label: "未知", value: 2, sort: 3 },
+        { label: '男', value: 1, sort: 1 },
+        { label: '女', value: 0, sort: 2 },
+        { label: '未知', value: 2, sort: 3 },
       ],
     },
     {
-      code: "common_status",
-      name: "通用状态",
-      remark: "启用/禁用",
+      code: 'common_status',
+      name: '通用状态',
+      remark: '启用/禁用',
       items: [
-        { label: "启用", value: 1, color: "success", sort: 1 },
-        { label: "禁用", value: 0, color: "error", sort: 2 },
+        { label: '启用', value: 1, color: 'success', sort: 1 },
+        { label: '禁用', value: 0, color: 'error', sort: 2 },
       ],
     },
     {
-      code: "yes_no",
-      name: "是否",
-      remark: "是否选项",
+      code: 'yes_no',
+      name: '是否',
+      remark: '是否选项',
       items: [
-        { label: "是", value: 1, sort: 1 },
-        { label: "否", value: 0, sort: 2 },
+        { label: '是', value: 1, sort: 1 },
+        { label: '否', value: 0, sort: 2 },
       ],
     },
   ] as const;
@@ -628,7 +690,7 @@ async function main() {
             value: item.value,
             sort: item.sort,
             status: 1,
-            color: "color" in item ? (item as { color?: string }).color ?? null : null,
+            color: 'color' in item ? ((item as { color?: string }).color ?? null) : null,
             remark: null,
           },
         });
@@ -640,7 +702,7 @@ async function main() {
             value: item.value,
             sort: item.sort,
             status: 1,
-            color: "color" in item ? (item as { color?: string }).color ?? null : null,
+            color: 'color' in item ? ((item as { color?: string }).color ?? null) : null,
           },
         });
       }
@@ -648,12 +710,12 @@ async function main() {
   }
   console.log(`  ok dict types: ${dictSpecs.length}`);
 
-  console.log("Seed done. Change default passwords before production.");
+  console.log('Development demo seed done. Never use demo credentials in production.');
 }
 
 main()
-  .catch((e) => {
-    console.error(e);
+  .catch((error) => {
+    console.error(error);
     process.exit(1);
   })
   .finally(async () => {

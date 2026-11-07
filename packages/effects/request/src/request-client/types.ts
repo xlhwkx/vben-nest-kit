@@ -5,7 +5,11 @@ import type {
   InternalAxiosRequestConfig,
 } from 'axios';
 
+import type { AuthSessionSnapshot } from './auth-session';
+
 type ExtendOptions<T = any> = {
+  authSession?: AuthSessionSnapshot;
+  skipAuthRefresh?: boolean;
   /**
    * 参数序列化方式。预置的有
    * - brackets: ids[]=1&ids[]=2&ids[]=3

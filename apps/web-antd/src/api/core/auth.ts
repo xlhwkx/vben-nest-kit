@@ -32,7 +32,10 @@ export namespace AuthApi {
  * 登录
  */
 export async function loginApi(data: AuthApi.LoginParams) {
-  return requestClient.post<AuthApi.LoginResult>('/auth/login', data);
+  return requestClient.post<AuthApi.LoginResult>('/auth/login', data, {
+    withCredentials: true,
+    skipAuthRefresh: true,
+  });
 }
 
 /**
@@ -45,10 +48,10 @@ export async function getCaptchaApi() {
 /**
  * 刷新accessToken
  */
-export async function refreshTokenApi() {
+export async function refreshTokenApi(expectedUserId?: string) {
   return baseRequestClient.post<AuthApi.RefreshTokenResult>(
     '/auth/refresh',
-    undefined,
+    expectedUserId ? { expectedUserId } : undefined,
     {
       withCredentials: true,
     },
@@ -58,10 +61,14 @@ export async function refreshTokenApi() {
 /**
  * 退出登录
  */
-export async function logoutApi() {
-  return baseRequestClient.post('/auth/logout', undefined, {
-    withCredentials: true,
-  });
+export async function logoutApi(expectedUserId?: string) {
+  return baseRequestClient.post(
+    '/auth/logout',
+    expectedUserId ? { expectedUserId } : undefined,
+    {
+      withCredentials: true,
+    },
+  );
 }
 
 /**

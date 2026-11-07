@@ -1,4 +1,5 @@
-import type { RouteMeta as IRouteMeta } from './dist/index.d.mts';
+// eslint-disable-next-line no-restricted-imports -- Self-reference resolves workspace source and published declarations without importing another layer.
+import type { RouteMeta as IRouteMeta } from '@vben-core/typings';
 
 import 'vue-router';
 

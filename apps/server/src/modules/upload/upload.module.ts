@@ -6,10 +6,9 @@ import { UploadController } from './upload.controller';
 import { UploadService } from './upload.service';
 import { LocalStorageProvider } from './storage/local.storage';
 import { S3StorageProvider } from './storage/s3.storage';
-import {
-  STORAGE_PROVIDER,
-  type StorageProvider,
-} from './storage/storage.types';
+import { UploadCapacityInterceptor } from './upload-capacity.interceptor';
+import { STORAGE_PROVIDER } from './storage/storage.types';
+import type { StorageProvider } from './storage/storage.types';
 
 @Module({
   imports: [
@@ -22,7 +21,14 @@ import {
         const fileSize = Number.isFinite(n) && n > 0 ? n : 5_242_880;
         return {
           storage: memoryStorage(),
-          limits: { fileSize, files: 1 },
+          limits: {
+            fileSize,
+            files: 1,
+            fields: 0,
+            parts: 1,
+            fieldNameSize: 64,
+            fieldSize: 0,
+          },
         };
       },
     }),
@@ -32,20 +38,17 @@ import {
     {
       provide: STORAGE_PROVIDER,
       inject: [ConfigService],
-      useFactory: async (config: ConfigService): Promise<StorageProvider> => {
+      useFactory: (config: ConfigService): StorageProvider => {
         const driver = config.get<string>('STORAGE_DRIVER') ?? 'local';
         // Only construct the selected driver so S3 env is not required when local.
         if (driver === 's3') {
-          const s3 = new S3StorageProvider(config);
-          s3.onModuleInit();
-          return s3;
+          return new S3StorageProvider(config);
         }
-        const local = new LocalStorageProvider(config);
-        await local.onModuleInit();
-        return local;
+        return new LocalStorageProvider(config);
       },
     },
     UploadService,
+    UploadCapacityInterceptor,
   ],
   exports: [UploadService, STORAGE_PROVIDER],
 })

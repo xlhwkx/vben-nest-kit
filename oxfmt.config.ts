@@ -2,6 +2,8 @@ import { defineConfig } from '@vben/oxfmt-config';
 
 export default defineConfig({
   ignorePatterns: [
+    // The server's ESLint/Prettier configuration owns backend formatting.
+    'apps/server/**',
     'dist',
     'dev-dist',
     '.local',

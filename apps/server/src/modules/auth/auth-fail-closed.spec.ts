@@ -25,9 +25,9 @@ describe('authService auth:fail fail-closed', () => {
     getOrThrow: (k: string) => k,
   };
 
-  it('login → 503 when Redis getStrict throws (lock check fail-closed)', async () => {
+  it('login → 503 when Redis counter read throws (lock check fail-closed)', async () => {
     const redis = {
-      getStrict: jest.fn().mockRejectedValue(new Error('ECONNREFUSED')),
+      readCounterWithTtlStrict: jest.fn().mockRejectedValue(new Error('ECONNREFUSED')),
       incrWithTtlStrict: jest.fn(),
       del: jest.fn(),
     };
@@ -43,13 +43,13 @@ describe('authService auth:fail fail-closed', () => {
     await expect(
       svc.login({ username: 'vben', password: 'x' }, res, '127.0.0.1'),
     ).rejects.toBeInstanceOf(ServiceUnavailableException);
-    expect(redis.getStrict).toHaveBeenCalled();
+    expect(redis.readCounterWithTtlStrict).toHaveBeenCalled();
     expect(metrics.incLoginFailClosed).toHaveBeenCalled();
   });
 
   it('login → 503 when incrWithTtlStrict throws after bad credentials', async () => {
     const redis = {
-      getStrict: jest.fn().mockResolvedValue(null),
+      readCounterWithTtlStrict: jest.fn().mockResolvedValue(0),
       incrWithTtlStrict: jest.fn().mockRejectedValue(new Error('redis down')),
       del: jest.fn(),
     };

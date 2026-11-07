@@ -38,7 +38,7 @@ async function viteExtraAppConfigPlugin({
   return {
     async configResolved(config) {
       publicPath = ensureTrailingSlash(config.base);
-      source = await getConfigSource();
+      source = await getConfigSource(config.mode);
       hash = generatorContentHash(source, 8);
     },
     async generateBundle() {
@@ -70,8 +70,8 @@ async function viteExtraAppConfigPlugin({
   };
 }
 
-async function getConfigSource() {
-  const config = await loadEnv();
+async function getConfigSource(mode: string) {
+  const config = await loadEnv('VITE_GLOB_', mode);
   const windowVariable = `window.${VBEN_ADMIN_PRO_APP_CONF}`;
   // 确保变量不会被修改
   let source = `${windowVariable}=${JSON.stringify(config)};`;

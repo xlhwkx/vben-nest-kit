@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Header,
   Headers,
   Res,
   UnauthorizedException,
@@ -8,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { SkipThrottle } from '@nestjs/throttler';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
 import { SkipEnvelope } from '../../common/decorators/skip-envelope.decorator';
@@ -17,7 +18,6 @@ import { HealthService } from './health.service';
 
 @ApiTags('Health')
 @Public()
-@SkipThrottle()
 @Controller({ path: 'health', version: [VERSION_NEUTRAL, '1'] })
 export class HealthController {
   constructor(
@@ -27,18 +27,22 @@ export class HealthController {
   ) {}
 
   @Get()
+  @SkipThrottle()
   @ApiOperation({ summary: 'Basic health (legacy)' })
   check() {
     return this.health.check();
   }
 
   @Get('live')
+  @SkipThrottle()
   @ApiOperation({ summary: 'Liveness — process up, no dependency checks' })
   live() {
     return this.health.live();
   }
 
   @Get('ready')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @Header('Cache-Control', 'no-store')
   @ApiOperation({ summary: 'Readiness — Postgres + Redis ping' })
   ready() {
     return this.health.ready();
@@ -50,6 +54,7 @@ export class HealthController {
    * Disable with METRICS_ENABLED=false.
    */
   @Get('metrics')
+  @SkipThrottle()
   @SkipEnvelope()
   @ApiOperation({ summary: 'Prometheus metrics (internal scrape)' })
   metricsEndpoint(

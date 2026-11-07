@@ -1,3 +1,6 @@
+import { authorizationMutation } from '../../../common/authorization/authorization-mutation';
+import type { AuthUser } from '../../../common/decorators/current-user.decorator';
+import type { Prisma } from '../../../generated/prisma/client';
 import {
   Injectable,
   BadRequestException,
@@ -74,16 +77,26 @@ export class SystemDeptService {
     return this.buildTree(rows);
   }
 
-  async create(input: SystemDeptInput): Promise<SystemDeptNode> {
+  async create(input: SystemDeptInput, actor: AuthUser): Promise<SystemDeptNode> {
+    return authorizationMutation(this.prisma, actor, 'System:Dept:Create', (tx) =>
+      this.createAuthorized(input, actor.userId, tx),
+    );
+  }
+
+  private async createAuthorized(
+    input: SystemDeptInput,
+    actorId: string,
+    db: Prisma.TransactionClient,
+  ): Promise<SystemDeptNode> {
     const name = input.name?.trim();
     if (!name) throw new BadRequestException('name is required');
 
     const parentId = normalizePid(input.pid);
     if (parentId) {
-      await this.requireActiveDept(parentId);
+      await this.requireActiveDept(parentId, db);
     }
 
-    const row = await this.prisma.dept.create({
+    const row = await db.dept.create({
       data: {
         parentId,
         name,
@@ -91,7 +104,8 @@ export class SystemDeptService {
         remark: input.remark?.trim() || null,
       },
     });
-    this.audit.record({
+    await this.audit.recordInTransaction(db, {
+      userId: actorId,
       action: 'system.dept.create',
       module: 'system.dept',
       status: 200,
@@ -100,8 +114,19 @@ export class SystemDeptService {
     return toNode(row);
   }
 
-  async update(id: string, input: SystemDeptInput): Promise<SystemDeptNode> {
-    const existing = await this.requireActiveDept(id);
+  async update(id: string, input: SystemDeptInput, actor: AuthUser): Promise<SystemDeptNode> {
+    return authorizationMutation(this.prisma, actor, 'System:Dept:Update', (tx) =>
+      this.updateAuthorized(id, input, actor.userId, tx),
+    );
+  }
+
+  private async updateAuthorized(
+    id: string,
+    input: SystemDeptInput,
+    actorId: string,
+    db: Prisma.TransactionClient,
+  ): Promise<SystemDeptNode> {
+    const existing = await this.requireActiveDept(id, db);
     const name = input.name?.trim();
     if (!name) throw new BadRequestException('name is required');
 
@@ -113,15 +138,15 @@ export class SystemDeptService {
         throw new BadRequestException('Dept cannot be its own parent');
       }
       if (parentId) {
-        await this.requireActiveDept(parentId);
-        const descendantIds = await this.collectDescendantIds(id);
+        await this.requireActiveDept(parentId, db);
+        const descendantIds = await this.collectDescendantIds(id, db);
         if (descendantIds.has(parentId)) {
           throw new BadRequestException('Cannot move dept under its descendant');
         }
       }
     }
 
-    const row = await this.prisma.dept.update({
+    const row = await db.dept.update({
       where: { id },
       data: {
         ...(hasPidField ? { parentId } : {}),
@@ -130,7 +155,8 @@ export class SystemDeptService {
         remark: input.remark === undefined ? existing.remark : input.remark?.trim() || null,
       },
     });
-    this.audit.record({
+    await this.audit.recordInTransaction(db, {
+      userId: actorId,
       action: 'system.dept.update',
       module: 'system.dept',
       status: 200,
@@ -142,17 +168,27 @@ export class SystemDeptService {
   /**
    * Soft-delete one dept. Refuse when active children exist or users still reference it.
    */
-  async remove(id: string): Promise<{ id: string }> {
-    await this.requireActiveDept(id);
+  async remove(id: string, actor: AuthUser): Promise<{ id: string }> {
+    return authorizationMutation(this.prisma, actor, 'System:Dept:Delete', (tx) =>
+      this.removeAuthorized(id, actor.userId, tx),
+    );
+  }
 
-    const childCount = await this.prisma.dept.count({
+  private async removeAuthorized(
+    id: string,
+    actorId: string,
+    db: Prisma.TransactionClient,
+  ): Promise<{ id: string }> {
+    await this.requireActiveDept(id, db);
+
+    const childCount = await db.dept.count({
       where: { parentId: id, deletedAt: null },
     });
     if (childCount > 0) {
       throw new ConflictException('Dept has child departments; remove children first');
     }
 
-    const userCount = await this.prisma.user.count({
+    const userCount = await db.user.count({
       where: { deptId: id, deletedAt: null },
     });
     if (userCount > 0) {
@@ -160,11 +196,12 @@ export class SystemDeptService {
     }
 
     const now = new Date();
-    await this.prisma.dept.update({
+    await db.dept.update({
       where: { id },
       data: { deletedAt: now, status: 0 },
     });
-    this.audit.record({
+    await this.audit.recordInTransaction(db, {
+      userId: actorId,
       action: 'system.dept.delete',
       module: 'system.dept',
       status: 200,
@@ -178,8 +215,11 @@ export class SystemDeptService {
     await this.requireActiveDept(deptId);
   }
 
-  private async requireActiveDept(id: string): Promise<DeptRow> {
-    const row = await this.prisma.dept.findFirst({
+  private async requireActiveDept(
+    id: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<DeptRow> {
+    const row = await db.dept.findFirst({
       where: { id, deletedAt: null },
     });
     if (!row) {
@@ -188,8 +228,11 @@ export class SystemDeptService {
     return row;
   }
 
-  private async collectDescendantIds(rootId: string): Promise<Set<string>> {
-    const all = await this.prisma.dept.findMany({
+  private async collectDescendantIds(
+    rootId: string,
+    db: Prisma.TransactionClient,
+  ): Promise<Set<string>> {
+    const all = await db.dept.findMany({
       where: { deletedAt: null },
       select: { id: true, parentId: true },
     });

@@ -20,7 +20,6 @@ const [Form, formApi] = useVbenForm({
   showDefaultActions: false,
 });
 
-const id = ref<string>();
 const [Drawer, drawerApi] = useVbenDrawer<null | SystemUserApi.SystemUser>({
   async onConfirm() {
     const { valid } = await formApi.validate();
@@ -31,11 +30,12 @@ const [Drawer, drawerApi] = useVbenDrawer<null | SystemUserApi.SystemUser>({
     if (!payload.password) {
       delete payload.password;
     }
+    const existing = formData.value;
     drawerApi.lock();
-    (id.value
-      ? updateUser(id.value, payload as Omit<SystemUserApi.SystemUser, 'id'>)
+    (existing
+      ? updateUser(existing.id, { ...payload, version: existing.version })
       : createUser(
-          payload as Omit<SystemUserApi.SystemUser, 'id'> & {
+          payload as Omit<SystemUserApi.SystemUser, 'id' | 'version'> & {
             password: string;
             username: string;
           },
@@ -56,12 +56,10 @@ const [Drawer, drawerApi] = useVbenDrawer<null | SystemUserApi.SystemUser>({
       formApi.reset();
 
       if (data) {
-        formData.value = data;
-        id.value = data.id;
+        formData.value = { ...data };
         formApi.setState({ schema: useFormSchema(true) });
       } else {
         formData.value = undefined;
-        id.value = undefined;
         formApi.setState({ schema: useFormSchema(false) });
       }
 

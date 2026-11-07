@@ -24,16 +24,17 @@ export namespace AuthApi {
 export async function loginApi(data: AuthApi.LoginParams) {
   return requestClient.post<AuthApi.LoginResult>('/auth/login', data, {
     withCredentials: true,
+    skipAuthRefresh: true,
   });
 }
 
 /**
  * 刷新accessToken
  */
-export async function refreshTokenApi() {
+export async function refreshTokenApi(expectedUserId?: string) {
   return baseRequestClient.post<AuthApi.RefreshTokenResult>(
     '/auth/refresh',
-    null,
+    expectedUserId ? { expectedUserId } : undefined,
     {
       withCredentials: true,
     },
@@ -43,10 +44,14 @@ export async function refreshTokenApi() {
 /**
  * 退出登录
  */
-export async function logoutApi() {
-  return baseRequestClient.post('/auth/logout', null, {
-    withCredentials: true,
-  });
+export async function logoutApi(expectedUserId?: string) {
+  return baseRequestClient.post(
+    '/auth/logout',
+    expectedUserId ? { expectedUserId } : undefined,
+    {
+      withCredentials: true,
+    },
+  );
 }
 
 /**

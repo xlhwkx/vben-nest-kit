@@ -4,6 +4,7 @@ import { requestClient } from '#/api/request';
 
 export namespace SystemUserApi {
   export interface SystemUser {
+    version: number;
     [key: string]: any;
     createTime?: string;
     gender?: 0 | 1 | 2;
@@ -36,12 +37,12 @@ async function getUserList(params: Recordable<any>) {
  * @param data 用户数据（Must 含 username + password + name）
  */
 async function createUser(
-  data: Omit<SystemUserApi.SystemUser, 'id'> & {
+  data: Omit<SystemUserApi.SystemUser, 'id' | 'version'> & {
     password: string;
     username: string;
   },
 ) {
-  return requestClient.post('/system/user', data);
+  return requestClient.post<SystemUserApi.SystemUser>('/system/user', data);
 }
 
 /**
@@ -52,9 +53,16 @@ async function createUser(
  */
 async function updateUser(
   id: string,
-  data: Omit<SystemUserApi.SystemUser, 'id'> & { password?: string },
+  data: Partial<Omit<SystemUserApi.SystemUser, 'id' | 'version'>> & {
+    password?: string;
+  } & {
+    version: number;
+  },
 ) {
-  return requestClient.put(`/system/user/${id}`, data);
+  return requestClient.put<SystemUserApi.SystemUser>(
+    `/system/user/${id}`,
+    data,
+  );
 }
 
 /**

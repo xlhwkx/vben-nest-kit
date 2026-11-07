@@ -1,3 +1,18 @@
+import { assertEditClaim, parseEditVersion } from '../../../common/validation/edit-version';
+import {
+  listQuerySchema,
+  withListOffsetLimit,
+  listOffsetError,
+} from '../../../common/validation/list-query';
+import {
+  parseQuery,
+  optionalQueryText,
+  optionalQueryId,
+  optionalQueryEnum,
+} from '../../../common/validation/request-validation';
+import { authorizationMutation } from '../../../common/authorization/authorization-mutation';
+import type { AuthUser } from '../../../common/decorators/current-user.decorator';
+import { assertGrantableMenus } from '../../../common/authorization/permission-codes';
 import {
   Injectable,
   BadRequestException,
@@ -7,12 +22,12 @@ import {
 import * as argon2 from 'argon2';
 import { Prisma } from '../../../generated/prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { RedisService } from '../../../redis/redis.service';
 import { AuditService } from '../../audit/audit.service';
 import { parseListCreatedAtRange } from '../../../common/parse-list-time-range';
 import { formatCreateTimeIso } from '../../../common/format-create-time';
 
 export type SystemUserItem = {
+  version: number;
   id: string;
   name: string;
   username: string;
@@ -41,6 +56,7 @@ export type SystemUserCreateInput = {
 };
 
 export type SystemUserUpdateInput = {
+  version: number;
   username?: string;
   password?: string;
   name?: string;
@@ -72,12 +88,6 @@ export type SystemUserListQuery = {
 
 const USERNAME_MAX = 64;
 
-function parsePage(v: number | string | undefined, fallback: number): number {
-  const n = Number.parseInt(String(v ?? fallback), 10);
-  if (!Number.isFinite(n) || n < 1) return fallback;
-  return n;
-}
-
 /** Soft-delete tombstone: release @unique so the same username can be recreated. */
 function softDeletedUsername(username: string, id: string): string {
   const suffix = `__deleted_${id}`;
@@ -89,18 +99,29 @@ function isUniqueViolation(err: unknown): boolean {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
 }
 
+const userListSchema = listQuerySchema
+  .extend({
+    name: optionalQueryText(128),
+    remark: optionalQueryText(512),
+    startTime: optionalQueryText(64),
+    endTime: optionalQueryText(64),
+    id: optionalQueryId,
+    deptId: optionalQueryId,
+    status: optionalQueryEnum([0, 1]),
+    gender: optionalQueryEnum([0, 1, 2]),
+  })
+  .refine(withListOffsetLimit, listOffsetError);
+
 @Injectable()
 export class SystemUserService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly redis: RedisService,
     private readonly audit: AuditService,
   ) {}
 
-  async list(query: SystemUserListQuery): Promise<{ items: SystemUserItem[]; total: number }> {
-    const page = parsePage(query.page, 1);
-    let pageSize = parsePage(query.pageSize, 20);
-    if (pageSize > 100) pageSize = 100;
+  async list(rawQuery: SystemUserListQuery): Promise<{ items: SystemUserItem[]; total: number }> {
+    const query = parseQuery(userListSchema, rawQuery);
+    const { page, pageSize } = query;
 
     const where: Prisma.UserWhereInput = { deletedAt: null };
 
@@ -117,40 +138,51 @@ export class SystemUserService {
     if (query.remark?.trim()) {
       where.remark = { contains: query.remark.trim(), mode: 'insensitive' };
     }
-    if (query.status === 0 || query.status === '0' || query.status === 1 || query.status === '1') {
-      where.status = Number(query.status);
-    }
+    if (query.status !== undefined) where.status = query.status;
     if (query.deptId?.trim()) {
       where.deptId = query.deptId.trim();
     }
-    if (
-      query.gender === 0 ||
-      query.gender === '0' ||
-      query.gender === 1 ||
-      query.gender === '1' ||
-      query.gender === 2 ||
-      query.gender === '2'
-    ) {
-      where.gender = Number(query.gender);
-    }
+    if (query.gender !== undefined) where.gender = query.gender;
     const createdAt = parseListCreatedAtRange(query.startTime, query.endTime);
     if (createdAt) where.createdAt = createdAt;
 
-    const total = await this.prisma.user.count({ where });
-    const rows = await this.prisma.user.findMany({
-      where,
-      orderBy: [{ createdAt: 'desc' }, { username: 'asc' }],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      include: {
-        roles: { select: { roleId: true } },
-      },
-    });
+    // The scalar revision and relation ids must come from the same DB snapshot.
+    return this.prisma.$transaction(
+      async (tx) => {
+        const total = await tx.user.count({ where });
+        const rows = await tx.user.findMany({
+          where,
+          orderBy: [{ createdAt: 'desc' }, { username: 'asc' }],
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+          include: {
+            roles: { select: { roleId: true } },
+          },
+        });
 
-    return { items: rows.map((row) => this.toItem(row)), total };
+        return { items: rows.map((row) => this.toItem(row)), total };
+      },
+      { isolationLevel: 'RepeatableRead' },
+    );
   }
 
-  async create(input: SystemUserCreateInput): Promise<SystemUserItem> {
+  async create(input: SystemUserCreateInput, actor: AuthUser): Promise<SystemUserItem> {
+    if (!input.password || input.password.length < 6 || input.password.length > 128)
+      throw new BadRequestException('password must contain 6–128 characters');
+    const passwordHash = await argon2.hash(input.password, {
+      type: argon2.argon2id,
+    });
+    return authorizationMutation(this.prisma, actor, 'System:User:Create', (tx) =>
+      this.createAuthorized(input, actor.userId, tx, passwordHash),
+    );
+  }
+
+  private async createAuthorized(
+    input: SystemUserCreateInput,
+    actorId: string,
+    db: Prisma.TransactionClient,
+    passwordHash: string,
+  ): Promise<SystemUserItem> {
     const username = input.username?.trim();
     const name = input.name?.trim();
     const password = input.password ?? '';
@@ -163,43 +195,42 @@ export class SystemUserService {
       throw new BadRequestException(`username must be <= ${USERNAME_MAX} chars`);
     }
 
-    const dup = await this.prisma.user.findFirst({
+    const dup = await db.user.findFirst({
       where: { username, deletedAt: null },
     });
     if (dup) throw new ConflictException('Username already exists');
 
-    const roleIds = await this.validateRoleIds(input.roles ?? []);
-    const deptId = await this.validateDeptId(input.deptId);
+    if (input.roles !== undefined) await this.assertRolesGrantable(actorId, input.roles, db);
+    const roleIds = await this.validateRoleIds(input.roles ?? [], db);
+    const deptId = await this.validateDeptId(input.deptId, db);
     const gender = this.normalizeGender(input.gender);
-    const passwordHash = await argon2.hash(password, { type: argon2.argon2id });
 
     try {
-      const row = await this.prisma.$transaction(async (tx) => {
-        const user = await tx.user.create({
-          data: {
-            username,
-            passwordHash,
-            realName: name,
-            status: input.status === 0 ? 0 : 1,
-            gender,
-            remark: input.remark?.trim() || null,
-            homePath: input.homePath?.trim() || null,
-            avatar: input.avatar?.trim() || null,
-            ...(deptId ? { dept: { connect: { id: deptId } } } : {}),
-          },
-        });
-        if (roleIds.length > 0) {
-          await tx.userRole.createMany({
-            data: roleIds.map((roleId) => ({ userId: user.id, roleId })),
-            skipDuplicates: true,
-          });
-        }
-        return tx.user.findUniqueOrThrow({
-          where: { id: user.id },
-          include: { roles: { select: { roleId: true } } },
-        });
+      const user = await db.user.create({
+        data: {
+          username,
+          passwordHash,
+          realName: name,
+          status: input.status === 0 ? 0 : 1,
+          gender,
+          remark: input.remark?.trim() || null,
+          homePath: input.homePath?.trim() || null,
+          avatar: input.avatar?.trim() || null,
+          ...(deptId ? { dept: { connect: { id: deptId } } } : {}),
+        },
       });
-      this.audit.record({
+      if (roleIds.length > 0) {
+        await db.userRole.createMany({
+          data: roleIds.map((roleId) => ({ userId: user.id, roleId })),
+          skipDuplicates: true,
+        });
+      }
+      const row = await db.user.findUniqueOrThrow({
+        where: { id: user.id },
+        include: { roles: { select: { roleId: true } } },
+      });
+      await this.audit.recordInTransaction(db, {
+        userId: actorId,
         action: 'system.user.create',
         module: 'system.user',
         status: 200,
@@ -214,8 +245,38 @@ export class SystemUserService {
     }
   }
 
-  async update(id: string, input: SystemUserUpdateInput): Promise<SystemUserItem> {
-    const existing = await this.requireUser(id);
+  async update(id: string, input: SystemUserUpdateInput, actor: AuthUser): Promise<SystemUserItem> {
+    parseEditVersion(input.version);
+    if (
+      input.password !== undefined &&
+      (!input.password || input.password.length < 6 || input.password.length > 128)
+    )
+      throw new BadRequestException('password must contain 6–128 characters');
+    const passwordHash =
+      input.password === undefined
+        ? undefined
+        : await argon2.hash(input.password, { type: argon2.argon2id });
+    return authorizationMutation(this.prisma, actor, 'System:User:Update', (tx) =>
+      this.updateAuthorized(id, input, actor.userId, tx, passwordHash),
+    );
+  }
+
+  private async updateAuthorized(
+    id: string,
+    input: SystemUserUpdateInput,
+    actorId: string,
+    db: Prisma.TransactionClient,
+    passwordHash?: string,
+  ): Promise<SystemUserItem> {
+    await assertGrantableMenus(db, actorId, {
+      roles: { some: { role: { users: { some: { userId: id } } } } },
+    });
+    const existing = await this.requireUser(id, db);
+    const claim = await db.user.updateMany({
+      where: { id, version: input.version, deletedAt: null },
+      data: { version: { increment: 1 } },
+    });
+    assertEditClaim(claim.count);
 
     const data: Prisma.UserUpdateInput = {};
     let bumpToken = false;
@@ -227,7 +288,7 @@ export class SystemUserService {
         throw new BadRequestException(`username must be <= ${USERNAME_MAX} chars`);
       }
       if (username !== existing.username) {
-        const dup = await this.prisma.user.findFirst({
+        const dup = await db.user.findFirst({
           where: { username, deletedAt: null, NOT: { id } },
         });
         if (dup) throw new ConflictException('Username already exists');
@@ -251,7 +312,7 @@ export class SystemUserService {
     }
 
     if (input.deptId !== undefined) {
-      const nextDeptId = await this.validateDeptId(input.deptId);
+      const nextDeptId = await this.validateDeptId(input.deptId, db);
       data.dept = nextDeptId ? { connect: { id: nextDeptId } } : { disconnect: true };
     }
 
@@ -271,50 +332,44 @@ export class SystemUserService {
       if (!input.password || input.password.length < 6) {
         throw new BadRequestException('password must be at least 6 characters');
       }
-      data.passwordHash = await argon2.hash(input.password, {
-        type: argon2.argon2id,
-      });
+      data.passwordHash = passwordHash;
       bumpToken = true;
     }
 
+    if (input.roles !== undefined) await this.assertRolesGrantable(actorId, input.roles, db);
     const hasRolesField = input.roles !== undefined;
-    const roleIds = hasRolesField ? await this.validateRoleIds(input.roles ?? []) : null;
+    const roleIds = hasRolesField ? await this.validateRoleIds(input.roles ?? [], db) : null;
 
     if (bumpToken) {
       data.tokenVersion = { increment: 1 };
     }
 
     try {
-      const row = await this.prisma.$transaction(async (tx) => {
-        if (Object.keys(data).length > 0) {
-          await tx.user.update({ where: { id }, data });
-        }
-        if (roleIds !== null) {
-          await tx.userRole.deleteMany({ where: { userId: id } });
-          if (roleIds.length > 0) {
-            await tx.userRole.createMany({
-              data: roleIds.map((roleId) => ({ userId: id, roleId })),
-              skipDuplicates: true,
-            });
-          }
-        }
-        if (bumpToken) {
-          await tx.refreshToken.updateMany({
-            where: { userId: id, revokedAt: null },
-            data: { revokedAt: new Date() },
+      if (Object.keys(data).length > 0) {
+        await db.user.update({ where: { id }, data });
+      }
+      if (roleIds !== null) {
+        await db.userRole.deleteMany({ where: { userId: id } });
+        if (roleIds.length > 0) {
+          await db.userRole.createMany({
+            data: roleIds.map((roleId) => ({ userId: id, roleId })),
+            skipDuplicates: true,
           });
         }
-        return tx.user.findUniqueOrThrow({
-          where: { id },
-          include: { roles: { select: { roleId: true } } },
+      }
+      if (bumpToken) {
+        await db.refreshToken.updateMany({
+          where: { userId: id, revokedAt: null },
+          data: { revokedAt: new Date() },
         });
+      }
+      const row = await db.user.findUniqueOrThrow({
+        where: { id },
+        include: { roles: { select: { roleId: true } } },
       });
 
-      if (bumpToken || roleIds !== null) {
-        await this.redis.del(`perm:codes:${id}`);
-      }
-
-      this.audit.record({
+      await this.audit.recordInTransaction(db, {
+        userId: actorId,
         action: 'system.user.update',
         module: 'system.user',
         status: 200,
@@ -333,28 +388,39 @@ export class SystemUserService {
     }
   }
 
-  async remove(id: string): Promise<{ id: string }> {
-    const existing = await this.requireUser(id);
+  async remove(id: string, actor: AuthUser): Promise<{ id: string }> {
+    return authorizationMutation(this.prisma, actor, 'System:User:Delete', (tx) =>
+      this.removeAuthorized(id, actor.userId, tx),
+    );
+  }
+
+  private async removeAuthorized(
+    id: string,
+    actorId: string,
+    db: Prisma.TransactionClient,
+  ): Promise<{ id: string }> {
+    await assertGrantableMenus(db, actorId, {
+      roles: { some: { role: { users: { some: { userId: id } } } } },
+    });
+    const existing = await this.requireUser(id, db);
     const tombstone = softDeletedUsername(existing.username, id);
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id },
-        data: {
-          deletedAt: new Date(),
-          status: 0,
-          username: tombstone,
-          tokenVersion: { increment: 1 },
-        },
-      });
-      await tx.userRole.deleteMany({ where: { userId: id } });
-      await tx.refreshToken.updateMany({
-        where: { userId: id, revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
+    await db.user.update({
+      where: { id },
+      data: {
+        deletedAt: new Date(),
+        status: 0,
+        username: tombstone,
+        tokenVersion: { increment: 1 },
+      },
     });
-    await this.redis.del(`perm:codes:${id}`);
-    this.audit.record({
+    await db.userRole.deleteMany({ where: { userId: id } });
+    await db.refreshToken.updateMany({
+      where: { userId: id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    await this.audit.recordInTransaction(db, {
+      userId: actorId,
       action: 'system.user.delete',
       module: 'system.user',
       status: 200,
@@ -363,7 +429,21 @@ export class SystemUserService {
     return { id };
   }
 
+  private async assertRolesGrantable(
+    actorId: string,
+    roleIds: string[],
+    db: Prisma.TransactionClient,
+  ): Promise<void> {
+    await assertGrantableMenus(
+      db,
+      actorId,
+      { roles: { some: { roleId: { in: roleIds } } } },
+      'System:User:AssignRole',
+    );
+  }
+
   private toItem(row: {
+    version: number;
     id: string;
     username: string;
     realName: string;
@@ -377,6 +457,7 @@ export class SystemUserService {
     roles: { roleId: string }[];
   }): SystemUserItem {
     const item: SystemUserItem = {
+      version: row.version,
       id: row.id,
       name: row.realName,
       username: row.username,
@@ -392,11 +473,14 @@ export class SystemUserService {
     return item;
   }
 
-  private async validateDeptId(deptId: string | null | undefined): Promise<string | null> {
+  private async validateDeptId(
+    deptId: string | null | undefined,
+    db: Prisma.TransactionClient,
+  ): Promise<string | null> {
     if (deptId === undefined || deptId === null) return null;
     const id = String(deptId).trim();
     if (!id || id === '0') return null;
-    const row = await this.prisma.dept.findFirst({
+    const row = await db.dept.findFirst({
       where: { id, deletedAt: null },
       select: { id: true },
     });
@@ -406,8 +490,8 @@ export class SystemUserService {
     return row.id;
   }
 
-  private async requireUser(id: string) {
-    const row = await this.prisma.user.findFirst({
+  private async requireUser(id: string, db: Prisma.TransactionClient) {
+    const row = await db.user.findFirst({
       where: { id, deletedAt: null },
     });
     if (!row) throw new NotFoundException('User not found');
@@ -419,10 +503,10 @@ export class SystemUserService {
     return 2;
   }
 
-  private async validateRoleIds(ids: string[]): Promise<string[]> {
+  private async validateRoleIds(ids: string[], db: Prisma.TransactionClient): Promise<string[]> {
     const unique = [...new Set((ids ?? []).map((x) => String(x).trim()).filter(Boolean))];
     if (unique.length === 0) return [];
-    const found = await this.prisma.role.findMany({
+    const found = await db.role.findMany({
       where: { id: { in: unique } },
       select: { id: true },
     });

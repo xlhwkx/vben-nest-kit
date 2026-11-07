@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router';
 
 import { LOGIN_PATH } from '@vben/constants';
 import { preferences } from '@vben/preferences';
+import { accessTokenSubject } from '@vben/request';
 import { resetAllStores, useAccessStore, useUserStore } from '@vben/stores';
 
 import { notification } from 'ant-design-vue';
@@ -17,7 +18,9 @@ import {
   loginApi,
   logoutApi,
 } from '#/api';
+import { authSession, coordinateAuth } from '#/api/request';
 import { $t } from '#/locales';
+import { resetRoutes } from '#/router';
 
 export const useAuthStore = defineStore('auth', () => {
   const accessStore = useAccessStore();
@@ -25,6 +28,7 @@ export const useAuthStore = defineStore('auth', () => {
   const router = useRouter();
 
   const loginLoading = ref(false);
+  const isLoggingOut = ref(false);
 
   /**
    * 异步处理登录操作
@@ -39,6 +43,8 @@ export const useAuthStore = defineStore('auth', () => {
     let userInfo: null | UserInfo = null;
     try {
       loginLoading.value = true;
+      authSession.change();
+      const loginSnapshot = authSession.capture(accessStore.accessToken);
       // Default off: contract login is username+password only.
       // When VITE_CAPTCHA_REQUIRED=true, pull one-time ticket then submit.
       const captchaRequired =
@@ -58,17 +64,30 @@ export const useAuthStore = defineStore('auth', () => {
         loginPayload.captchaId = challenge.captchaId;
         loginPayload.captchaToken = challenge.captchaToken;
       }
-      const { accessToken } = await loginApi(loginPayload);
+      const { accessToken } = await coordinateAuth(() => {
+        authSession.assertCurrent(loginSnapshot, accessStore.accessToken);
+        return loginApi(loginPayload);
+      });
+      authSession.assertCurrent(loginSnapshot, accessStore.accessToken);
 
       // 如果成功获取到 accessToken
       if (accessToken) {
+        if (
+          accessTokenSubject(accessToken) !==
+          accessTokenSubject(accessStore.accessToken)
+        ) {
+          resetAllStores();
+          resetRoutes();
+        }
         accessStore.setAccessToken(accessToken);
+        const signedInSnapshot = authSession.capture(accessToken);
 
         // 获取用户信息并存储到 accessStore 中
         const [fetchUserInfoResult, accessCodes] = await Promise.all([
-          fetchUserInfo(),
+          getUserInfoApi(),
           getAccessCodesApi(),
         ]);
+        authSession.assertCurrent(signedInSnapshot, accessStore.accessToken);
 
         userInfo = fetchUserInfoResult;
 
@@ -102,13 +121,36 @@ export const useAuthStore = defineStore('auth', () => {
     };
   }
 
-  async function logout(redirect: boolean = true) {
+  async function logout(
+    redirect: boolean = true,
+    options: { revokeSession?: boolean } = {},
+  ) {
+    if (isLoggingOut.value) return false;
+    isLoggingOut.value = true;
+    if (options.revokeSession === false) authSession.reset();
+    else authSession.change();
+    const snapshot = authSession.capture(accessStore.accessToken);
     try {
-      await logoutApi();
+      if (options.revokeSession !== false)
+        await coordinateAuth(() => {
+          authSession.assertCurrent(snapshot, accessStore.accessToken);
+          return logoutApi(snapshot.principal ?? undefined);
+        });
     } catch {
-      // 不做任何处理
+      if (authSession.isLocalCurrent(snapshot))
+        notification.error({
+          message: '退出未完成',
+          description: '服务端会话撤销未确认，请重试退出。当前登录状态已保留。',
+          duration: 0,
+        });
+      return false;
+    } finally {
+      isLoggingOut.value = false;
     }
+    if (!authSession.isLocalCurrent(snapshot)) return false;
+    authSession.reset();
     resetAllStores();
+    resetRoutes();
     accessStore.setLoginExpired(false);
 
     // 已经在登录页时不能再带 redirect：此时 currentRoute.fullPath 就是登录页本身，

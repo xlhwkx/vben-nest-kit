@@ -1,5 +1,6 @@
-import { Injectable, UnauthorizedException } from "@nestjs/common";
-import { PrismaService } from "../../prisma/prisma.service";
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { safeMenuMeta } from '../../common/validation/menu-meta';
+import { PrismaService } from '../../prisma/prisma.service';
 
 /** Route node shape for GET /menu/all (api-contract-vben.md §4.6) */
 export type MenuRouteNode = {
@@ -34,10 +35,12 @@ export class MenuService {
   async getAllForUser(userId: string): Promise<MenuRouteNode[]> {
     const user = await this.prisma.user.findFirst({
       where: { id: userId, deletedAt: null, status: 1 },
-      include: { roles: { select: { roleId: true } } },
+      include: {
+        roles: { where: { role: { status: 1 } }, select: { roleId: true } },
+      },
     });
     if (!user) {
-      throw new UnauthorizedException("Unauthorized");
+      throw new UnauthorizedException('Unauthorized');
     }
     const roleIds = user.roles.map((r) => r.roleId);
     if (roleIds.length === 0) {
@@ -59,9 +62,9 @@ export class MenuService {
         status: 1,
         deletedAt: null,
         // /menu/all is dynamic routes — buttons are access codes, not routes
-        NOT: { type: "button" },
+        NOT: { type: 'button' },
       },
-      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     });
 
     return this.buildTree(rows);
@@ -87,10 +90,7 @@ export class MenuService {
       const node: MenuRouteNode = {
         name: row.name,
         path: row.path,
-        meta:
-          row.meta && typeof row.meta === "object" && !Array.isArray(row.meta)
-            ? (row.meta as Record<string, unknown>)
-            : {},
+        meta: safeMenuMeta(row.meta),
       };
       if (row.component) node.component = row.component;
       if (row.redirect) node.redirect = row.redirect;

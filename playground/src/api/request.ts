@@ -1,12 +1,19 @@
 /**
  * 该文件可自行根据业务逻辑进行调整
  */
-import type { AxiosResponseHeaders, RequestClientOptions } from '@vben/request';
+import type {
+  AxiosResponseHeaders,
+  RequestClientConfig,
+  RequestClientOptions,
+} from '@vben/request';
 
 import { useAppConfig } from '@vben/hooks';
 import { preferences } from '@vben/preferences';
 import {
   authenticateResponseInterceptor,
+  AuthSessionChangedError,
+  createAuthSessionBoundary,
+  createRefreshCoordinator,
   defaultResponseInterceptor,
   errorMessageResponseInterceptor,
   RequestClient,
@@ -22,6 +29,8 @@ import { useAuthStore } from '#/store';
 import { refreshTokenApi } from './core';
 
 const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
+export const authSession = createAuthSessionBoundary(apiURL);
+export const coordinateAuth = createRefreshCoordinator(apiURL);
 
 function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   const client = new RequestClient({
@@ -40,32 +49,52 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
       return data;
     },
   });
+  const coordinateRefresh = createRefreshCoordinator(baseURL);
 
   /**
    * 重新认证逻辑
    */
-  async function doReAuthenticate() {
+  async function doReAuthenticate(
+    error?: unknown,
+    config?: RequestClientConfig,
+  ) {
+    const snapshot = config?.authSession;
+    if (snapshot && !authSession.isLocalCurrent(snapshot)) return;
     console.warn('Access token or refresh token is invalid or expired. ');
     const accessStore = useAccessStore();
     const authStore = useAuthStore();
+    const sessionCurrent =
+      !snapshot || authSession.isCurrent(snapshot, accessStore.accessToken);
     accessStore.setAccessToken(null);
     if (
+      !(error instanceof AuthSessionChangedError) &&
+      sessionCurrent &&
       preferences.app.loginExpiredMode === 'modal' &&
       accessStore.isAccessChecked
     ) {
       accessStore.setLoginExpired(true);
     } else {
-      await authStore.logout();
+      await authStore.logout(true, { revokeSession: false });
     }
   }
 
   /**
    * 刷新token逻辑
    */
-  async function doRefreshToken() {
+  async function doRefreshToken(config: RequestClientConfig) {
     const accessStore = useAccessStore();
-    const resp = await refreshTokenApi();
-    const newToken = resp.data;
+    const snapshot = config.authSession;
+    if (!snapshot?.principal) throw new AuthSessionChangedError();
+    const expectedUserId = snapshot.principal;
+    const newToken = await coordinateRefresh(async () => {
+      authSession.assertCurrent(snapshot, accessStore.accessToken);
+      const resp = await refreshTokenApi(expectedUserId);
+      authSession.assertCurrent(snapshot, accessStore.accessToken);
+      authSession.assertCurrent(snapshot, resp.data);
+      return resp.data;
+    });
+    authSession.assertCurrent(snapshot, accessStore.accessToken);
+    authSession.assertCurrent(snapshot, newToken);
     accessStore.setAccessToken(newToken);
     return newToken;
   }
@@ -78,10 +107,28 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   client.addRequestInterceptor({
     fulfilled: async (config) => {
       const accessStore = useAccessStore();
-
+      config.authSession ??= authSession.capture(accessStore.accessToken);
+      try {
+        authSession.assertCurrent(config.authSession, accessStore.accessToken);
+      } catch (error) {
+        await doReAuthenticate(error, config);
+        throw error;
+      }
       config.headers.Authorization = formatToken(accessStore.accessToken);
       config.headers['Accept-Language'] = preferences.app.locale;
       return config;
+    },
+  });
+
+  client.addResponseInterceptor({
+    fulfilled: (response) => {
+      if (response.config.authSession) {
+        authSession.assertCurrent(
+          response.config.authSession,
+          useAccessStore().accessToken,
+        );
+      }
+      return response;
     },
   });
 
@@ -102,6 +149,9 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
       doRefreshToken,
       enableRefreshToken: preferences.app.enableRefreshToken,
       formatToken,
+      isSessionCurrent: (config) =>
+        !!config.authSession &&
+        authSession.isCurrent(config.authSession, useAccessStore().accessToken),
     }),
   );
 

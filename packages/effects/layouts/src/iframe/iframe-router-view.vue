@@ -6,6 +6,7 @@ import { useRoute } from 'vue-router';
 
 import { preferences } from '@vben/preferences';
 import { useTabbarStore } from '@vben/stores';
+import { safeHttpUrl } from '@vben/utils';
 
 import { VbenSpinner } from '@vben-core/shadcn-ui';
 
@@ -19,9 +20,11 @@ const enableTabbar = computed(() => preferences.tabbar.enable);
 
 const iframeRoutes = computed(() => {
   if (!enableTabbar.value) {
-    return route.meta.iframeSrc ? [route] : [];
+    return safeHttpUrl(route.meta.iframeSrc) ? [route] : [];
   }
-  return tabbarStore.getTabs.filter((tab) => !!tab.meta?.iframeSrc);
+  return tabbarStore.getTabs.filter(
+    (tab) => !!safeHttpUrl(tab.meta?.iframeSrc),
+  );
 });
 
 const tabNames = computed(
@@ -76,7 +79,9 @@ function showSpinning(index: number) {
       >
         <VbenSpinner :spinning="showSpinning(index)" />
         <iframe
-          :src="item.meta.iframeSrc as string"
+          :src="safeHttpUrl(item.meta.iframeSrc)"
+          sandbox="allow-forms allow-scripts"
+          referrerpolicy="no-referrer"
           class="size-full"
           @load="hideLoading(index)"
         ></iframe>

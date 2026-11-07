@@ -3,10 +3,12 @@
 本目录是**青栈**（`apps/server` Nest 后端）的架构与贡献说明。上游 Vben VitePress 仍在 `docs/src`，互不影响。
 
 | 文档 | 中文 | English |
-|------|------|---------|
+| --- | --- | --- |
 | 架构 | [architecture.md](./architecture.md) | [architecture.en.md](./architecture.en.md) |
 | 贡献指南 | [contributing.md](./contributing.md) | [contributing.en.md](./contributing.en.md) |
 | 生产部署 | [deploy.md](./deploy.md) | — |
+| 生产交付与验收 | [production-acceptance.md](./production-acceptance.md) | — |
+| 第十三轮交付记录 | [production-delivery-phase13-2026-11-07.md](./production-delivery-phase13-2026-11-07.md) | — |
 | 备份/迁移演练 | [backup-migrate.md](./backup-migrate.md) | — |
 | 可观测性 | [observability.md](./observability.md) | — |
 | v0.1 发版说明（草稿） | [release-notes-v0.1.md](./release-notes-v0.1.md) | same |
@@ -26,7 +28,6 @@
 ## Changelog
 
 - 青栈变更：仓库根 [`CHANGELOG.qingzhan.md`](../../CHANGELOG.qingzhan.md)（不覆盖上游各包 CHANGELOG）
-
 
 ## 产品文档站
 

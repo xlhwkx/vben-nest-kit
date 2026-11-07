@@ -6,7 +6,7 @@
 
 | Layer | Choice |
 | --- | --- |
-| Frontend | Vben Admin (web-antd), `accessMode: backend`, `VITE_NITRO_MOCK=false` |
+| Frontend | playground contains the management pages; web-antd is a UI integration example. Both use `accessMode: backend`, `VITE_NITRO_MOCK=false` |
 | Backend | NestJS 12 + Express (`apps/server` / `@qingzhan/server`) |
 | ORM / DB | Prisma 7 + PostgreSQL |
 | Cache / throttle store | Redis 7 (`ioredis`) |
@@ -31,7 +31,7 @@ Auth · User · Menu · System (user/role/menu/dept/dict) · Upload · Health ·
 ## Local ports
 
 - Nest: `5320`
-- web-antd dev: `5666` (vite proxy → Nest)
+- playground management frontend: `5555` (Vite proxy → Nest); web-antd example: `5666`
 - Compose Postgres / Redis: see `apps/server/.env.example`
 
 ## Cross-cutting (shipped highlights)
@@ -43,19 +43,19 @@ Auth · User · Menu · System (user/role/menu/dept/dict) · Upload · Health ·
 - **Audit**: async `record` for login success/failure/lock, logout, sensitive writes, upload; list requires `System:Audit:List`; `x-request-id` header.
 - **Upload**: local disk + UUID; MIME allow-list + **magic-bytes** (`file-type`); no SVG by default; `nosniff`; multer limit aligns with `UPLOAD_MAX_BYTES`.
 - **Queue**: optional BullMQ skeleton (`QUEUE_ENABLED` default false); `MAIL_DRIVER=console|smtp` (console default, smtp dry-run). Runtime type `MailProvider` aliases tech-plan §26 `MailSender`.
-- **Captcha**: production UI keeps web-antd **SliderCaptcha**; API does not require captcha by default (contract). `CAPTCHA_REQUIRED=true` enforces tokens from `GET /api/auth/captcha`; frontend `VITE_CAPTCHA_REQUIRED=true` makes `loginApi` fetch and send `captchaId`+`captchaToken`. `CAPTCHA_E2E_BYPASS=1` + `VITE_CAPTCHA_E2E_BYPASS` are test-only (never production).
+- **Captcha tickets**: web-antd keeps **SliderCaptcha**. The API defaults to no ticket requirement; `CAPTCHA_REQUIRED=true` requires the ticket from `GET /api/auth/captcha`. Redis GETDEL permits one consumption; storage errors return 503. This public ticket does not verify a human action and is not server-side bot protection. `VITE_CAPTCHA_REQUIRED=true` fetches the ticket before login. Server CAPTCHA bypass is test-only and forbidden in production; Qingzhan Vite configs reject frontend bypass in every mode.
 
 ## Explicitly not done
 
 - Production object-storage ops (optional MinIO Compose, lifecycle policies)
 - Dedicated BullMQ worker process and live SMTP delivery (console/smtp dry-run skeleton present; no outbound by default)
-- Full Playwright UI E2E still optional; SliderCaptcha has an E2E bypass harness
+- Browser authentication/security integration CI is defined for both UIs; execution and HTTPS acceptance of the production dist remain pending (see the acceptance runbook)
 - OAuth / multi-tenant / full Clean Architecture
 
 ## Manual smoke (contract §11)
 
-1. Root `pnpm install`, then `pnpm dev:antd` + Nest `:5320`
-2. Open login, **drag the slider**, sign in as `vben` / `123456` (or set `VITE_CAPTCHA_E2E_BYPASS=true` for local/E2E only)
+1. Root `pnpm install --frozen-lockfile`, migrate and explicitly seed a development DB, then `pnpm dev:admin` + Nest `:5320`
+2. Open login, complete the slider and sign in as `vben` / `123456`; Qingzhan frontend configs reject E2E captcha bypass
 3. Confirm menus; optional: shorten `JWT_ACCESS_TTL` and watch silent refresh
 
 ## See also

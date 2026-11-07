@@ -2,7 +2,6 @@
 
 > **项目**：vben-nest-kit（青栈）
 
-
 > **版本**：1.0.0  
 > **日期**：2026-11-02（Asia/Singapore）  
 > **真源**：[`vbenjs/vue-vben-admin` `main`](https://github.com/vbenjs/vue-vben-admin) → `apps/backend-mock/**` + `apps/web-antd/src/api/**`  
@@ -14,7 +13,7 @@
 ## 0. 怎么读这份合同
 
 | 标记 | 含义 |
-|------|------|
+| --- | --- |
 | **Must** | Nest 必须与 Vben 前端默认行为兼容，改了前端会挂 |
 | **Should** | 推荐实现；偏离需在 PR 注明并改前端或加适配层 |
 | **Mock quirk** | 官方 mock 的怪异行为；Nest **不要照抄缺陷**，但要保证前端仍能工作 |
@@ -65,9 +64,11 @@ Vben 开发代理：`/api` → `http://localhost:5320/api`（rewrite 去掉再�
 分页 Query（列表类 Must）：
 
 | 参数 | 类型 | 默认 | 说明 |
-|------|------|------|------|
+| --- | --- | --- | --- |
 | `page` | number/string | `1` | 从 1 开始 |
 | `pageSize` | number/string | 视接口（常 `20`；table 默认 `10`） | Nest Should 上限 100 |
+
+**Nest 管理接口加固（2026-11-07）**：用户、角色、字典类型/数据、审计列表默认 `page=1&pageSize=20`，仅接受正整数，每页最多 100，偏移 `(page-1)*pageSize` 最多 1,000,000。省略或空字符串使用默认值；非法值、超限、已知标量的重复/嵌套参数返回 400，不再静默纠正。树列表不分页，演示 table 的行为单独遵循其接口说明。UUID、状态、性别、排序与日期校验的具体范围和兼容性见[第三批加固说明](../docs/qingzhan/production-hardening-phase3-2026-11-07.md)。
 
 ### 1.3 业务失败（信封内）
 
@@ -83,11 +84,14 @@ Vben 开发代理：`/api` → `http://localhost:5320/api`（rewrite 去掉再�
 ### 1.4 HTTP 状态码（与 mock 对齐）
 
 | 场景 | HTTP | body |
-|------|------|------|
+| --- | --- | --- |
 | 参数缺失（如 login 缺字段） | 400 | `{ code: -1, … }` |
 | 未登录 / access 无效 | **401** | `unAuthorizedResponse` |
 | 账号密码错误 / refresh 失败 | **403** | `forbiddenResponse` |
 | 演示环境禁止写（mock 中间件） | 403 | 仅 mock；Nest 不复刻 |
+| 合法 ID 对应的记录不存在（Nest） | 404 | `{ code: -1, … }` |
+| 唯一键/引用/并发冲突（Nest） | 409 | `{ code: -1, … }`；不暴露数据库内部信息 |
+| 连接池或授权锁资源超时（Nest） | 503 | `{ code: -1, … }`；采用有限重试 |
 
 ### 1.5 唯一例外：`POST /api/auth/refresh`（Must 兼容）
 
@@ -102,7 +106,7 @@ const newToken = resp.data; // axios 的 response.data = 纯字符串
 
 Nest **Must** 二选一：
 
-1. **兼容 mock**：HTTP 200，`Content-Type: text/plain` 或 JSON string，body 为 accessToken 原文；或  
+1. **兼容 mock**：HTTP 200，`Content-Type: text/plain` 或 JSON string，body 为 accessToken 原文；或
 2. **更干净**：返回 `{ code: 0, data: "<token>", … }`，同时改前端 `doRefreshToken` / `RefreshTokenResult`（需同步改前端，不单改后端）。
 
 **v0.1 建议**：选项 1，零前端改动。合同下文按选项 1 描述。
@@ -114,7 +118,7 @@ Nest **Must** 二选一：
 ### 2.1 Access Token
 
 | 项 | 值 |
-|----|----|
+| --- | --- |
 | 传递 | 请求头 `Authorization: Bearer <accessToken>` |
 | 前端写入 | `login` / `refresh` 成功后 `accessStore.setAccessToken` |
 | Mock 签发 | JWT，secret=`access_token_secret`，`expiresIn: '7d'`（**仅 mock**；Nest 按技术方案用短 TTL + 真密钥） |
@@ -125,7 +129,7 @@ Nest **Must** 二选一：
 真源：`apps/backend-mock/utils/cookie-utils.ts`
 
 | 项 | Mock 实际值 | Nest 合同 |
-|----|-------------|-----------|
+| --- | --- | --- |
 | Cookie 名 | **`jwt`** | Must 名 `jwt`（或网关改写；改名必须改前端/`withCredentials` 约定） |
 | 内容 | refresh JWT | opaque / JWT + 服务端会话索引均可 |
 | `httpOnly` | `true` | Must |
@@ -143,14 +147,16 @@ Nest **Must** 二选一：
 - 允许头含 `Authorization, Content-Type, Accept-Language, …`
 - `OPTIONS` → 204
 
-Nest：`trust proxy` 在反代后 Must 打开（见技术方案）。
+Nest 的 `POST /auth/login`、`/auth/refresh`、`/auth/logout`（两套 API 前缀）额外校验请求来源：带 `Origin` 时须是 `CORS_ORIGINS` 或 `APP_PUBLIC_URL` 的源，`null`、畸形值和未授权源返回 403；不清写 Cookie、不旋转/撤销会话、不执行登录。无 Origin 的 CLI 调用兼容，缺 Origin 但 `Sec-Fetch-Site=cross-site` 时拒绝。CORS 的响应访问规则本身不能替代此校验。
+
+Nest：反代后只信任明确配置的入口 IP/CIDR；不要设 `trust proxy=true` 或任意跳数。
 
 ---
 
 ## 3. 路径版本策略（Nest only + 兼容）
 
 | 前缀 | 用途 |
-|------|------|
+| --- | --- |
 | `/api/auth/*`、`/api/user/*`、`/api/menu/*`、`/api/system/*`、`/api/dict/*`、`/api/upload` … | **Vben 兼容别名（Must 在 v0.x 提供）** |
 | `/api/v1/...` | 正式版本化资源（技术方案第 28 章）；可与上表同处理器 |
 
@@ -162,11 +168,11 @@ Nest：`trust proxy` 在反代后 Must 打开（见技术方案）。
 
 ### 4.1 `POST /api/auth/login`
 
-| | |
-|--|--|
-| 认证 | 无 |
-| Content-Type | `application/json` |
-| 前端 | `loginApi` → `requestClient.post('/auth/login', data)` |
+|              |                                                        |
+| ------------ | ------------------------------------------------------ |
+| 认证         | 无                                                     |
+| Content-Type | `application/json`                                     |
+| 前端         | `loginApi` → `requestClient.post('/auth/login', data)` |
 
 **Request**
 
@@ -177,10 +183,10 @@ Nest：`trust proxy` 在反代后 Must 打开（见技术方案）。
 }
 ```
 
-| 字段 | 必填 | 说明 |
-|------|------|------|
-| `username` | 是 | |
-| `password` | 是 | |
+| 字段       | 必填 | 说明 |
+| ---------- | ---- | ---- |
+| `username` | 是   |      |
+| `password` | 是   |      |
 
 缺任一字段 → HTTP 400 + `{ code: -1, message: "BadRequestException", error: "Username and password are required" }`（message/error 文案可本地化，结构 Must）。
 
@@ -216,11 +222,11 @@ Nest：`trust proxy` 在反代后 Must 打开（见技术方案）。
 
 **Demo 账号（seed，非合同硬约束）**
 
-| username | password | roles | homePath |
-|----------|----------|-------|----------|
-| `vben` | `123456` | `["super"]` | `/dashboard/workspace` |
-| `admin` | `123456` | `["admin"]` | `/dashboard/workspace` |
-| `jack` | `123456` | `["user"]` | `/dashboard/analytics` |
+| username | password | roles       | homePath               |
+| -------- | -------- | ----------- | ---------------------- |
+| `vben`   | `123456` | `["super"]` | `/dashboard/workspace` |
+| `admin`  | `123456` | `["admin"]` | `/dashboard/workspace` |
+| `jack`   | `123456` | `["user"]`  | `/dashboard/analytics` |
 
 密码错误 → HTTP 403，文案类似 `Username or password is incorrect.`
 
@@ -228,12 +234,12 @@ Nest：`trust proxy` 在反代后 Must 打开（见技术方案）。
 
 ### 4.2 `POST /api/auth/refresh`
 
-| | |
-|--|--|
+|  |  |
+| --- | --- |
 | 认证 | Cookie `jwt`（无 Bearer 要求） |
-| 前端 | `baseRequestClient.post('/auth/refresh', undefined, { withCredentials: true })` |
+| 前端 | `baseRequestClient.post('/auth/refresh', { expectedUserId }, { withCredentials: true })` |
 
-**Request body**：无。
+**Request body**：兼容无请求体；Nest 额外支持 `{ "expectedUserId": "用户 UUID" }`。当前两个配套前端发送原请求 token 的用户 ID；若 Cookie 属于其他用户，返回 403，且不消费令牌、不写清 Cookie。此字段用于防止账号混淆，不能代替 Cookie 鉴权。
 
 **Response（兼容模式 Must）**
 
@@ -243,12 +249,16 @@ Nest：`trust proxy` 在反代后 Must 打开（见技术方案）。
 
 失败（无 cookie / 无效 / 用户不存在）→ HTTP 403 + 错误信封。
 
+**Nest 会话并发约定**：refresh 在数据库事务中一次性消费旧令牌；同一旧 Cookie 并发提交最多一次成功，失败请求不重发令牌，也不发送清 Cookie 的 `Set-Cookie`。无 Cookie、无效 Cookie、错误登录同样不清共享 Cookie，避免延迟响应覆盖另一请求刚设置的新 Cookie。仅显式 logout 清 Cookie 并吊销当前会话家族；失效令牌继续被服务端拒绝，不设重放宽限期。
+
+web-antd / playground 的登录、自动续期和主动退出使用同一前端 origin 下的 Web Locks，按 API origin 串行发送，锁等待上限 15 秒；每次读取浏览器当前 HttpOnly Cookie，不在 localStorage 或广播消息中传递令牌。不同前端 origin 不共享该锁，不支持 Web Locks 时只保证同一 JS 上下文串行。前端额外记录请求的用户及本地登录世代，通过 localStorage 仅共享随机变更标记；身份/世代变化时拒绝旧响应、刷新结果和重放队列。存储受限时保留本地世代检查及刷新用户核对，不声称跨标签页同步登录世代。自动续期失败的被动重新认证不调用服务端 logout；用户主动登出仍执行 logout。登录、refresh、logout 跨域请求须使用 `withCredentials: true`；旧客户端可继续省略 refresh/logout 请求体，勿发送 JSON `null`。
+
 ---
 
 ### 4.3 `POST /api/auth/logout`
 
-| | |
-|--|--|
+|  |  |
+| --- | --- |
 | 认证 | Cookie 可选 |
 | 前端 | `baseRequestClient.post('/auth/logout', …, { withCredentials: true })` |
 
@@ -258,15 +268,15 @@ Nest：`trust proxy` 在反代后 Must 打开（见技术方案）。
 { "code": 0, "data": "", "error": null, "message": "ok" }
 ```
 
-副作用：清除 `jwt` cookie；Nest Should 吊销服务端 refresh 会话。
+副作用：清除 `jwt` cookie；Nest 吊销当前 refresh 会话家族。可选请求体 `{ "expectedUserId": "用户 UUID" }` 与 refresh 使用相同的身份核对，当前配套前端会发送它；不匹配时不撤销其他账号、不清 Cookie。数据库撤销失败返回错误，也不清 Cookie；前端展示“退出未完成”并保留当前状态，用户可以重试，不能把本地清理当作已完成服务端退出。
 
 ---
 
 ### 4.4 `GET /api/auth/codes`
 
-| | |
-|--|--|
-| 认证 | Bearer Must |
+|      |                                  |
+| ---- | -------------------------------- |
+| 认证 | Bearer Must                      |
 | 前端 | `getAccessCodesApi` → `string[]` |
 
 **Response `data`**：权限码字符串数组，例如：
@@ -281,9 +291,9 @@ Nest：`trust proxy` 在反代后 Must 打开（见技术方案）。
 
 ### 4.5 `GET /api/user/info`
 
-| | |
-|--|--|
-| 认证 | Bearer Must |
+|      |                                             |
+| ---- | ------------------------------------------- |
+| 认证 | Bearer Must                                 |
 | 前端 | `getUserInfoApi` → `@vben/types` `UserInfo` |
 
 **Mock 实际 `data`**（access JWT 解出用户后去掉 password）：
@@ -301,7 +311,7 @@ Nest：`trust proxy` 在反代后 Must 打开（见技术方案）。
 **前端类型期望**（`BasicUserInfo` + 扩展；有 `[key: string]: any`）：
 
 | 字段 | 前端类型 | Nest |
-|------|----------|------|
+| --- | --- | --- |
 | `username` | string | Must |
 | `realName` | string | Must |
 | `roles` | `string[]` | Must（驱动路由权限） |
@@ -317,11 +327,13 @@ Nest：`trust proxy` 在反代后 Must 打开（见技术方案）。
 
 ### 4.6 `GET /api/menu/all`
 
-| | |
-|--|--|
-| 认证 | Bearer Must |
+**青栈交付入口（2026-11-07）**：完整管理页面由 playground 提供；web-antd 为另一套 UI 的认证/路由接入示例。空库 `bootstrap:admin` 会向所建管理员授予 System 目录及用户/角色/菜单/部门/字典/字典数据六个页面路由，首页 `/system/user`；开发 seed 仅向 super/admin 授予这些页面。已有库通过显式 `provision:admin-routes` 为指定的全权限管理员补齐导航，冲突拒绝回滚，不使用 seed 覆盖现有配置。详见[生产验收指南](../docs/qingzhan/production-acceptance.md)。
+
+|      |                                                   |
+| ---- | ------------------------------------------------- |
+| 认证 | Bearer Must                                       |
 | 前端 | `getAllMenusApi` → `RouteRecordStringComponent[]` |
-| 模式 | `accessMode: backend` 时由此生成动态路由 |
+| 模式 | `accessMode: backend` 时由此生成动态路由          |
 
 **Response `data`**：菜单树数组。节点形状（mock）：
 
@@ -349,7 +361,7 @@ Nest：`trust proxy` 在反代后 Must 打开（见技术方案）。
 ```
 
 | 字段 | 说明 |
-|------|------|
+| --- | --- |
 | `name` | 路由 name，Must 唯一 |
 | `path` | 路由 path |
 | `component` | 字符串组件路径（前端映射视图）；外链/内嵌可用 `IFrameView` 等 |
@@ -366,9 +378,11 @@ Nest：`trust proxy` 在反代后 Must 打开（见技术方案）。
 
 ### 5.1 `POST /api/upload`
 
-| | |
-|--|--|
-| 认证 | Bearer Must |
+Nest 限制：只接收一个名为 `file` 的文件，不接受其他普通字段或额外文件（400）；超过文件大小上限返回 413。每进程上传容量耗尽返回 503，可稍后重试。容量覆盖文件解析、校验和存储，无请求排队；两套 API 前缀使用同一预算。
+
+|      |                                    |
+| ---- | ---------------------------------- |
+| 认证 | Bearer Must                        |
 | 前端 | multipart（见 `upload.ts` 应用侧） |
 
 **Mock Response `data`**
@@ -405,11 +419,11 @@ Nest Should：接收 `multipart/form-data` 文件字段（字段名与前端约�
 #### `GET /api/dict/data?code=user_gender` — Bearer
 
 无 `code` → `data: []`。  
-有 `code` → 该类型启用项，按 `sort` 升序，元素为 `{ label, value, color? }`。
+有 `code` → 仅当类型本身启用时返回其启用项，按 `sort` 升序，元素为 `{ label, value, color? }`；禁用类型返回 `[]`。
 
 #### `GET /api/dict/version` — Bearer
 
-`data`: number（字典变更版本；前端用于失效缓存）。Nest 每次字典写操作递增。
+`data`: number（JavaScript 安全整数；前端用于失效缓存）。PostgreSQL 字典表触发器在数据事务内递增，提交后才可见；直接写入、级联与种子也参与。版本不保证连续、不等于修改次数，不再依赖 Redis 计数器。升级需应用 `20261107020000_dictionary_revision`，详见[第四轮记录](../docs/qingzhan/production-hardening-phase4-2026-11-07.md)。
 
 ---
 
@@ -496,11 +510,30 @@ Body：`dictCode`, `label`, `value` 必填；`color?`, `remark?`, `sort?`（默�
 
 > Mock 对 `POST|PUT|PATCH|DELETE /api/system/*`（**字典除外**）一律 403「演示环境，禁止修改」。Nest **必须实现真写**，不要复刻该中间件。
 
+### 管理编辑版本（Nest 当前实现）
+
+用户、角色、菜单的管理列表及创建/更新响应均返回正整数 `version`。`PUT /api/system/user/:id`、`PUT /api/system/role/:id`、`PUT /api/system/menu/:id` 必须携带读取时的版本号；缺失或格式错误返回 400，版本过期返回 409，且不修改记录、关联或成功审计。不存在的记录仍返回 404。
+
+例如角色状态切换提交 `{ "version": 12, "status": 0 }`。版本包括 `UserRole` / `RoleMenu` 关联变化；它与认证用的 `tokenVersion` 无关，也不是时间戳。一次保存可能递增多次，调用方必须使用响应中的版本或重新读取，不能自行加一。409 后提示刷新并保留用户输入，不得自动取得新版本并重发旧授权快照。
+
+该约定属于接口变更，后端迁移和对应客户端需要配套更新。部门、字典及 DELETE 接口本轮未增加此版本前置条件。
+
 ### 7.1 菜单
 
 #### `GET /api/system/menu/list` — Bearer
 
 `data`：管理端菜单树 `MOCK_MENU_LIST` 形状（含 `id`, `pid?`, `name`, `path`, `type`=`catalog|menu|button|embedded|link`, `status`, `authCode?`, `component?`, `meta`, `children?`）。
+
+Nest 节点另含 `version`。`POST /api/system/menu` 创建时 `name/path/type` 必传；`PUT /api/system/menu/:id` 更新时再加必传 `version`。更新的可选字段遵循以下规则：
+
+| 字段 | 省略 | 显式清空 |
+| --- | --- | --- |
+| `pid` | 保留父级 | `null`（兼容根节点 `0` / 空字符串），移动到根 |
+| `status` | 保留状态 | 不接受 null；显式传 0 或 1 |
+| `authCode/component/redirect` | 保留内容 | `null` 或空字符串 |
+| `meta` | 保留整个对象及排序 | `null` 或 `{}` 清空；传对象时整体替换，不做深合并 |
+
+传入新 `meta` 时 `meta.order` 同步排序；新对象不含 order 时排序归零。清空父级的前端应显式传 null，不能用 JSON 中会被省略的 undefined 表达。按钮不能作为父级，也不能把已有子节点的菜单改成按钮。
 
 #### `GET /api/system/menu/name-exists` — Bearer
 
@@ -568,6 +601,10 @@ Query：`page`, `pageSize`, `name?`, `id?`, `remark?`, `startTime?`, `endTime?`,
 
 `permissions`：菜单 id 列表（与 `system/menu/list` 的 id 对应）。
 
+Nest 使用 UUID 字符串，并返回 `version`。角色创建或显式替换 permissions 时，页面/目录等非按钮节点必须同时选择所有未删除的祖先节点；缺失祖先返回 400，不会隐式添加授权或权限码。按钮允许作为独立 API 权限授予。禁用菜单的状态过滤仍然生效，选择祖先不会自动启用它。playground 权限树将半选祖先显式纳入提交值。
+
+菜单移动或类型变更如果破坏已有角色的上述路由约束，会返回 400 并整笔回滚；应先由管理员明确为相关角色配置所需祖先。历史不完整授权不会通过迁移自动扩权，需要人工复核并保存合法授权集合。
+
 ---
 
 ### 7.4 用户（系统用户列表，非 `/user/info`）
@@ -591,7 +628,7 @@ Query：`page`, `pageSize`, `name?`, `id?`, `remark?`, `startTime?`, `endTime?`,
 ```
 
 | 字段 | 取值 |
-|------|------|
+| --- | --- |
 | `status` | `0` 禁用 / `1` 启用 |
 | `gender` | `0` 女 / `1` 男 / `2` 未知（与字典 `user_gender` 示例一致，以你们 seed 为准） |
 
@@ -602,7 +639,7 @@ Nest CRUD Should 扩展；密码只接受写入接口、永不回读。
 ## 8. 示例 / 工具接口（P2，可延后）
 
 | 方法 | 路径 | 认证 | 说明 |
-|------|------|------|------|
+| --- | --- | --- | --- |
 | GET | `/api/table/list` | Bearer | 演示表格；Query：`page`,`pageSize`,`sortBy`,`sortOrder`；分页 `items+total` |
 | GET | `/api/status?status=500` | 无 | 把 HTTP 状态设为 query，返回错误信封（联调/演示） |
 | GET/POST | `/api/test` | 视实现 | mock 探活；**Nest 不实现**，用 `GET /api/v1/health`（live/ready）替代 |
@@ -618,7 +655,7 @@ Nest 健康检查（技术方案）：`GET /api/v1/health/live`、`/ready` —�
 ## 9. 接口总表（速查）
 
 | 方法 | 路径 | Auth | 信封 | 优先级 |
-|------|------|------|------|--------|
+| --- | --- | --- | --- | --- |
 | POST | `/api/auth/login` | — | 是 | P0 |
 | POST | `/api/auth/refresh` | Cookie | **否（纯 token 字符串）** | P0 |
 | POST | `/api/auth/logout` | Cookie | 是 | P0 |
@@ -656,26 +693,26 @@ Nest 健康检查（技术方案）：`GET /api/v1/health/live`、`/ready` —�
 
 实现时对照，避免「抄 mock 抄出漏洞」：
 
-1. **禁止**在任何响应中返回密码哈希或明文。  
-2. **Login** 最小 `data` 只需 `accessToken`；用户信息走 `/user/info`。  
-3. **Refresh**：v0.1 保持「body=纯字符串」；并做 refresh 旋转 + 服务端吊销。  
-4. **Cookie**：名仍为 `jwt`；CORS 凭证模式 Origin 回显。  
-5. **ID**：业务主键用 UUID（技术方案 UUID v7）；mock 里用户 `id: number` 仅 demo。`/user/info` 建议同时给 `userId`（string）。  
-6. **时间**：存储与 API 优先 ISO-8601 UTC；不要依赖 `zh-CN` 本地化字符串做过滤。  
-7. **不要**实现「演示环境禁止修改」中间件。  
-8. **Access TTL**：短于 mock 的 7d；靠 refresh 续命。  
+1. **禁止**在任何响应中返回密码哈希或明文。
+2. **Login** 最小 `data` 只需 `accessToken`；用户信息走 `/user/info`。
+3. **Refresh**：v0.1 保持「body=纯字符串」；并做 refresh 旋转 + 服务端吊销。
+4. **Cookie**：名仍为 `jwt`；CORS 凭证模式 Origin 回显。
+5. **ID**：业务主键用 UUID（技术方案 UUID v7）；mock 里用户 `id: number` 仅 demo。`/user/info` 建议同时给 `userId`（string）。
+6. **时间**：存储与 API 优先 ISO-8601 UTC；不要依赖 `zh-CN` 本地化字符串做过滤。
+7. **不要**实现「演示环境禁止修改」中间件。
+8. **Access TTL**：短于 mock 的 7d；靠 refresh 续命。
 9. 提供 `/api/v1` 正式前缀；兼容别名可标 deprecated 但 v0.x 保留。
 
 ---
 
 ## 11. 联调验收清单（最小）
 
-- [ ] 关 Nitro mock（`VITE_NITRO_MOCK=false`），`VITE_GLOB_API_URL` 指向 Nest。  
-- [ ] 三个 demo 用户可登录；错误密码 403。  
-- [ ] 登录后 Cookie 出现 `jwt`；`/user/info`、`/auth/codes`、`/menu/all` 正常。  
-- [ ] 人为过期 access 后，带 Cookie 调 refresh，前端静默续上（`enableRefreshToken` 开启时）。  
-- [ ] logout 后 Cookie 清除，再 refresh 失败。  
-- [ ] 字典 all/version 与后台改字典后 version 递增。  
+- [ ] 关 Nitro mock（`VITE_NITRO_MOCK=false`），`VITE_GLOB_API_URL` 指向 Nest。
+- [ ] 三个 demo 用户可登录；错误密码 403。
+- [ ] 登录后 Cookie 出现 `jwt`；`/user/info`、`/auth/codes`、`/menu/all` 正常。
+- [ ] 人为过期 access 后，带 Cookie 调 refresh，前端静默续上（`enableRefreshToken` 开启时）。
+- [ ] logout 后 Cookie 清除，再 refresh 失败。
+- [ ] 字典 all/version 与后台改字典后 version 递增。
 - [ ] 响应无 `password` 字段。
 
 ---
@@ -683,7 +720,7 @@ Nest 健康检查（技术方案）：`GET /api/v1/health/live`、`/ready` —�
 ## 12. 修订记录
 
 | 版本 | 日期 | 说明 |
-|------|------|------|
+| --- | --- | --- |
 | 1.0.0 | 2026-11-02 | 首版：对照 `vue-vben-admin` main 的 `backend-mock` + `web-antd` 请求层落稿 |
 | 1.0.1 | 2026-11-02 | Nest-only：`GET /api[/v1]/system/audit/list`（审计分页；无 mock 对照） |
 

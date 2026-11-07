@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CaptchaService } from './captcha.service';
 import { CAPTCHA_E2E_BYPASS_TOKEN } from './captcha.types';
@@ -12,13 +12,13 @@ function mockConfig(map: Record<string, unknown>): ConfigService {
 
 function mockRedis(store: Map<string, string>): RedisService {
   return {
-    get: (key: string) => Promise.resolve(store.get(key) ?? null),
-    set: (key: string, value: string) => {
-      store.set(key, value);
-      return Promise.resolve();
-    },
-    del: (key: string) => {
+    getDelStrict: (key: string) => {
+      const value = store.get(key) ?? null;
       store.delete(key);
+      return Promise.resolve(value);
+    },
+    setStrict: (key: string, value: string) => {
+      store.set(key, value);
       return Promise.resolve();
     },
   } as unknown as RedisService;
@@ -98,6 +98,31 @@ describe('captchaService', () => {
           captchaToken: CAPTCHA_E2E_BYPASS_TOKEN,
         }),
       ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  it('allows only one concurrent consumer of the same challenge', async () => {
+    await withEnv({ required: true, bypass: false }, async () => {
+      const svc = new CaptchaService(mockConfig({}), mockRedis(new Map()));
+      const challenge = await svc.issueChallenge();
+      const results = await Promise.allSettled([
+        svc.assertLoginCaptcha(challenge),
+        svc.assertLoginCaptcha(challenge),
+      ]);
+      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    });
+  });
+
+  it('reports storage failures as unavailable when issuing or consuming a challenge', async () => {
+    await withEnv({ required: true, bypass: false }, async () => {
+      const svc = new CaptchaService(mockConfig({}), {
+        setStrict: jest.fn().mockRejectedValue(new Error('Redis unavailable')),
+        getDelStrict: jest.fn().mockRejectedValue(new Error('Redis unavailable')),
+      } as never);
+      await expect(svc.issueChallenge()).rejects.toBeInstanceOf(ServiceUnavailableException);
+      await expect(
+        svc.assertLoginCaptcha({ captchaId: 'ticket', captchaToken: 'token' }),
+      ).rejects.toBeInstanceOf(ServiceUnavailableException);
     });
   });
 });

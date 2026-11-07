@@ -19,6 +19,9 @@ interface PlaygroundPreferencesExtension {
 export const overridesPreferences = defineOverridesPreferences({
   // overrides
   app: {
+    accessMode: 'backend',
+    // Nest sessions use a rotating HttpOnly cookie when the access token expires.
+    enableRefreshToken: true,
     name: import.meta.env.VITE_APP_TITLE,
   },
   copyright: appCopyrightPreferences,

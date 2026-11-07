@@ -1,11 +1,10 @@
 /* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call -- e2e harness */
 /* oxlint-disable typescript/no-require-imports, eslint/no-nested-ternary, typescript/no-non-null-assertion -- e2e harness */
 import { INestApplication, VERSION_NEUTRAL, VersioningType } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
 import cookieParser = require('cookie-parser');
 import request from 'supertest';
 import type { App } from 'supertest/types';
-import { AppModule } from '../src/app.module';
+import { appFixture } from './app-fixture';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { requestIdMiddleware } from '../src/common/middleware/request-id.middleware';
 import { RedisService } from '../src/redis/redis.service';
@@ -35,9 +34,7 @@ describe('Auth + Health (e2e)', () => {
     process.env.CAPTCHA_REQUIRED = 'false';
     process.env.CAPTCHA_E2E_BYPASS = 'false';
 
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
+    const moduleFixture = await appFixture();
 
     app = moduleFixture.createNestApplication();
     app.use(cookieParser());
@@ -383,7 +380,7 @@ describe('Auth + Health (e2e)', () => {
     expect(row.createTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
   });
 
-  it('POST /api/system/role without code → auto slug; PUT {status} partial OK', async () => {
+  it('POST /api/system/role without code → auto slug; PUT {status,version} partial OK', async () => {
     const stamp = Date.now().toString(36);
     const created = await request(app.getHttpServer())
       .post('/api/system/role')
@@ -404,7 +401,7 @@ describe('Auth + Health (e2e)', () => {
     const patched = await request(app.getHttpServer())
       .put(`/api/system/role/${id}`)
       .set('Authorization', `Bearer ${accessToken}`)
-      .send({ status: 0 })
+      .send({ status: 0, version: created.body.data.version })
       .expect(200);
     expect(patched.body.code).toBe(0);
     expect(patched.body.data?.status).toBe(0);
@@ -556,15 +553,18 @@ describe('Auth + Health (e2e)', () => {
   });
 
   it('POST /api/system/user with roles[] binds role ids', async () => {
-    const rolesRes = await request(app.getHttpServer())
-      .get('/api/system/role/list')
-      .query({ page: 1, pageSize: 5 })
-      .set('Authorization', `Bearer ${accessToken}`)
-      .expect(200);
-    const roleId = rolesRes.body.data?.items?.[0]?.id as string | undefined;
-    expect(roleId).toEqual(expect.any(String));
-
     const stamp = Date.now().toString(36);
+    // Bind a role whose grants are within this administrator's authority.
+    const roleResponse = await request(app.getHttpServer())
+      .post('/api/system/role')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        name: `Role Binding ${stamp}`,
+        code: `rolebind_${stamp}`,
+        permissions: [],
+      })
+      .expect(200);
+    const roleId = roleResponse.body.data.id as string;
     const username = `rolebind_${stamp}`;
     const created = await request(app.getHttpServer())
       .post('/api/system/user')
@@ -584,6 +584,10 @@ describe('Auth + Health (e2e)', () => {
     const id = created.body.data.id as string;
     await request(app.getHttpServer())
       .delete(`/api/system/user/${id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    await request(app.getHttpServer())
+      .delete(`/api/system/role/${roleId}`)
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(200);
   });
@@ -681,9 +685,7 @@ describe('Captcha harness (e2e)', () => {
     process.env.AUTH_FAIL_USER_MAX = '10000';
     process.env.AUTH_FAIL_IP_MAX = '10000';
 
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
+    const moduleFixture = await appFixture();
     app = moduleFixture.createNestApplication();
     app.use(cookieParser());
     app.setGlobalPrefix('api');
@@ -796,9 +798,7 @@ describe('Login throttle fail-closed (e2e)', () => {
     process.env.AUTH_FAIL_USER_MAX = '10000';
     process.env.AUTH_FAIL_IP_MAX = '10000';
 
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
+    const moduleFixture = await appFixture();
 
     app = moduleFixture.createNestApplication();
     app.use(cookieParser());
@@ -826,7 +826,7 @@ describe('Login throttle fail-closed (e2e)', () => {
     const evalMock = jest.fn().mockRejectedValue(new Error('simulated redis down'));
     const getClientSpy = jest.spyOn(redis, 'getClient').mockReturnValue({
       eval: evalMock,
-    } as ReturnType<RedisService['getClient']>);
+    } as unknown as ReturnType<RedisService['getClient']>);
     try {
       const res = await request(app.getHttpServer())
         .post('/api/auth/login')
@@ -853,9 +853,7 @@ describe('Login auth:fail lock fail-closed (e2e)', () => {
     process.env.AUTH_FAIL_IP_MAX = '10000';
     process.env.METRICS_ENABLED = 'true';
 
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
+    const moduleFixture = await appFixture();
 
     app = moduleFixture.createNestApplication();
     app.use(cookieParser());
@@ -874,9 +872,9 @@ describe('Login auth:fail lock fail-closed (e2e)', () => {
     await app.close();
   });
 
-  it('Redis getStrict failure on login → 503 Login lock unavailable', async () => {
+  it('Redis counter read failure on login → 503 Login lock unavailable', async () => {
     const spy = jest
-      .spyOn(redis, 'getStrict')
+      .spyOn(redis, 'readCounterWithTtlStrict')
       .mockRejectedValue(new Error('simulated redis down for auth:fail'));
     try {
       const res = await request(app.getHttpServer())

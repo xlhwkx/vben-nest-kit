@@ -35,7 +35,10 @@ const titleSuffix = ref<string>();
 type MenuDrawerData =
   | SystemMenuApi.SystemMenu
   | { pid?: SystemMenuApi.SystemMenu['pid'] };
-type MenuSubmitValues = Omit<SystemMenuApi.SystemMenu, 'children' | 'id'>;
+type MenuSubmitValues = Omit<
+  SystemMenuApi.SystemMenu,
+  'children' | 'id' | 'version'
+>;
 type MenuFormValues = MenuSubmitValues & { linkSrc?: string };
 
 function encodeMenuFormValues(
@@ -58,7 +61,10 @@ function encodeMenuFormValues(
       meta,
     };
   }
-  return formValues;
+  const meta = { ...formValues.meta };
+  Reflect.deleteProperty(meta, 'iframeSrc');
+  Reflect.deleteProperty(meta, 'link');
+  return { ...formValues, meta };
 }
 
 function decodeMenuFormValues(
@@ -488,7 +494,7 @@ const [Drawer, drawerApi] = useVbenDrawer<MenuDrawerData>({
     if (isOpen) {
       const data = drawerApi.getData();
       if (data && 'id' in data) {
-        formData.value = data;
+        formData.value = { ...data };
         await formApi.setSubmitValues(data);
         titleSuffix.value = formData.value.meta?.title
           ? $t(formData.value.meta.title)
@@ -510,9 +516,14 @@ async function onSubmit() {
   if (valid) {
     drawerApi.lock();
     const data = await formApi.getValues();
+    // Clearing the parent selector explicitly moves to root; omission preserves it.
+    data.pid ??= null;
     try {
       await (formData.value?.id
-        ? updateMenu(formData.value.id, data)
+        ? updateMenu(formData.value.id, {
+            ...data,
+            version: formData.value.version,
+          })
         : createMenu(data));
       drawerApi.close();
       emit('success');

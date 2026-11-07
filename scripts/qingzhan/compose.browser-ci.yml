@@ -1,0 +1,29 @@
+# Disposable CI infrastructure. No host-wide container names or persistent volumes.
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports: ['127.0.0.1:55433:5432']
+    environment:
+      POSTGRES_USER: qingzhan
+      POSTGRES_DB: qingzhan_browser
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U qingzhan -d qingzhan_browser']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  redis:
+    image: redis:7-alpine
+    ports: ['127.0.0.1:56379:6379']
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?required}
+    command: ['sh', '-c', 'exec redis-server --requirepass "$$REDIS_PASSWORD"']
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli ping | grep -q PONG',
+        ]
+      interval: 2s
+      timeout: 3s
+      retries: 30

@@ -1,11 +1,6 @@
 import type { ApplicationPluginOptions } from '../typing';
 
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
-
-import { fs } from '@vben/node-utils';
-
-import dotenv from 'dotenv';
+import { loadEnv as loadViteEnv } from 'vite';
 
 const getBoolean = (value: string | undefined) => value === 'true';
 
@@ -18,54 +13,33 @@ const getNumber = (value: string | undefined, fallback: number) =>
 /**
  * 获取当前环境下生效的配置文件名
  */
-function getConfFiles() {
-  const script = process.env.npm_lifecycle_script as string;
+function resolveMode(explicitMode?: string) {
+  const script = process.env.npm_lifecycle_script ?? '';
   const reg = /--mode ([\d_a-z]+)/;
   const result = reg.exec(script);
-  let mode = 'production';
-  if (result) {
+  let mode = explicitMode ?? 'production';
+  if (result && !explicitMode) {
     mode = result[1] as string;
   }
-  return ['.env', '.env.local', `.env.${mode}`, `.env.${mode}.local`];
+  return mode;
 }
 
 /**
  * Get the environment variables starting with the specified prefix
  * @param match prefix
- * @param confFiles ext
+ * @param mode explicit Vite mode; lifecycle inference is a compatibility fallback
  */
 async function loadEnv<T = Record<string, string>>(
   match = 'VITE_GLOB_',
-  confFiles = getConfFiles(),
+  mode = resolveMode(),
 ) {
-  let envConfig = {};
-
-  for (const confFile of confFiles) {
-    try {
-      const confFilePath = join(process.cwd(), confFile);
-      if (existsSync(confFilePath)) {
-        const envPath = await fs.readFile(confFilePath, {
-          encoding: 'utf8',
-        });
-        const env = dotenv.parse(envPath);
-        envConfig = { ...envConfig, ...env };
-      }
-    } catch (error) {
-      console.error(`Error while parsing ${confFile}`, error);
-    }
-  }
-  const reg = new RegExp(`^(${match})`);
-  Object.keys(envConfig).forEach((key) => {
-    if (!reg.test(key)) {
-      Reflect.deleteProperty(envConfig, key);
-    }
-  });
-  return envConfig as T;
+  // Use Vite's parser for file order, ${...} expansion and CI overrides alike.
+  return loadViteEnv(mode, process.cwd(), match) as T;
 }
 
 async function loadAndConvertEnv(
   match = 'VITE_',
-  confFiles = getConfFiles(),
+  mode = resolveMode(),
 ): Promise<
   Partial<ApplicationPluginOptions> & {
     appTitle: string;
@@ -73,7 +47,7 @@ async function loadAndConvertEnv(
     port: number;
   }
 > {
-  const envConfig = await loadEnv(match, confFiles);
+  const envConfig = await loadEnv(match, mode);
 
   const {
     VITE_APP_TITLE,
@@ -107,4 +81,4 @@ async function loadAndConvertEnv(
   };
 }
 
-export { loadAndConvertEnv, loadEnv };
+export { loadAndConvertEnv, loadEnv, resolveMode };

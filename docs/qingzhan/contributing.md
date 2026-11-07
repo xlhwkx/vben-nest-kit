@@ -32,19 +32,17 @@ docker compose up -d
 优先仓库根：
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 pnpm --filter @qingzhan/server start:dev
 ```
 
-若根 `pnpm install` 因上游 Vben postinstall / leftover 失败，**后端 fallback**：
+仅开发后端时可在根目录使用 workspace filter，仍保留根锁文件与构建白名单：
 
 ```bash
-cd apps/server
-pnpm install --ignore-workspace
-pnpm exec prisma generate
-pnpm exec prisma migrate deploy
-pnpm exec prisma db seed
-pnpm start:dev
+IGNORE_STUB=1 pnpm install --frozen-lockfile --filter @qingzhan/server...
+pnpm --filter @qingzhan/server exec prisma migrate deploy
+ALLOW_DEMO_SEED=true pnpm --filter @qingzhan/server exec prisma db seed
+pnpm --filter @qingzhan/server start:dev
 ```
 
 `apps/server/pnpm-lock.yaml` 已 gitignore；workspace 场景以根 lock 为准。
@@ -58,11 +56,11 @@ pnpm test:e2e
 
 需要 Compose + `.env` + seed。Node engines：`^22.18 || ^24.12`（脚本含 `--experimental-vm-modules`）。详见 `apps/server/README.md`。
 
-### 前端联调（web-antd）
+### 前端联调
 
 已配置 `VITE_NITRO_MOCK=false`、`accessMode: 'backend'`、proxy → Nest。改 preferences 后清 localStorage。
 
-**干净机器必走根目录 `pnpm install`**（含 postinstall stub）。仅装 `apps/server` 无法跑 `pnpm dev:antd`。若 `@vben/vite-config` 解析失败，检查 `internal/vite-config/dist/index.mjs`，缺失则执行 `pnpm -r run --if-present stub` 后再 `pnpm dev:antd`（默认 http://localhost:5666）。步骤细节见根 `README.md`「前端联调」。
+完整管理页面使用 `pnpm dev:admin`（playground，http://localhost:5555）；web-antd 示例使用 `pnpm dev:antd`（http://localhost:5666）。干净机器须根目录 `pnpm install --frozen-lockfile`（含 postinstall stub）。若 `@vben/vite-config` 解析失败，完成安装后执行 `pnpm -r run --if-present stub`。根 README 提供从配置、迁移到 seed 的主路径；质量命令与运行验收见[生产验收指南](./production-acceptance.md)。
 
 ## 安全与卫生
 

@@ -16,14 +16,21 @@ describe('form field slot migration warning plugin', () => {
     expect(plugin.configResolved).toBeTypeOf('function');
     if (typeof plugin.configResolved !== 'function') return;
 
-    plugin.configResolved({ logger: { warn: warning } } as ResolvedConfig);
+    plugin.configResolved.call(
+      undefined as never,
+      { logger: { warn: warning } } as unknown as ResolvedConfig,
+    );
 
     expect(warning).toHaveBeenCalledOnce();
     expect(warning).toHaveBeenCalledWith(FORM_FIELD_SLOT_MIGRATION_WARNING);
     expect(plugin.transformIndexHtml).toBeTypeOf('function');
     if (typeof plugin.transformIndexHtml !== 'function') return;
 
-    const result = plugin.transformIndexHtml('', {} as never);
+    const result = plugin.transformIndexHtml.call(
+      undefined as never,
+      '',
+      {} as never,
+    );
 
     expect(result).toEqual([
       {

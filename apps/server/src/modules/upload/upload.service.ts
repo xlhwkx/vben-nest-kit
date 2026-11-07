@@ -10,13 +10,11 @@ import { ConfigService } from '@nestjs/config';
 import { createHash, randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 import type { Express } from 'express';
-import { fromBuffer } from 'file-type';
+import { fileTypeFromBuffer } from 'file-type';
 import { AuditService } from '../audit/audit.service';
 import { LocalStorageProvider } from './storage/local.storage';
-import {
-  STORAGE_PROVIDER,
-  type StorageProvider,
-} from './storage/storage.types';
+import { STORAGE_PROVIDER } from './storage/storage.types';
+import type { StorageProvider } from './storage/storage.types';
 
 // SVG (image/svg+xml) omitted by default (XSS); allow via UPLOAD_ALLOWED_MIME.
 const DEFAULT_ALLOWED = new Set([
@@ -41,8 +39,7 @@ const EXT_BY_MIME: Record<string, string> = {
   'application/pdf': '.pdf',
   'text/plain': '.txt',
   'application/msword': '.doc',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-    '.docx',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
   'application/vnd.ms-excel': '.xls',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
 };
@@ -66,9 +63,7 @@ export class UploadService implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
-    this.maxBytes = Number(
-      this.config.get<number>('UPLOAD_MAX_BYTES') ?? 5_242_880,
-    );
+    this.maxBytes = Number(this.config.get<number>('UPLOAD_MAX_BYTES') ?? 5_242_880);
     const rawAllow = this.config.get<string>('UPLOAD_ALLOWED_MIME');
     this.allowedMimes = rawAllow
       ? new Set(
@@ -93,9 +88,7 @@ export class UploadService implements OnModuleInit {
     if (this.storage instanceof LocalStorageProvider) {
       return this.storage.getPublicPath();
     }
-    return (
-      this.config.get<string>('UPLOAD_PUBLIC_PATH') ?? '/uploads'
-    ).replace(/\/$/, '');
+    return (this.config.get<string>('UPLOAD_PUBLIC_PATH') ?? '/uploads').replace(/\/$/, '');
   }
 
   getMaxBytes(): number {
@@ -109,14 +102,17 @@ export class UploadService implements OnModuleInit {
    */
   private async resolveMime(file: Express.Multer.File): Promise<string> {
     const claimed = normalizeMime(file.mimetype || '');
-    const detected = await fromBuffer(file.buffer);
+    let detected;
+    try {
+      detected = await fileTypeFromBuffer(file.buffer);
+    } catch {
+      throw new BadRequestException('Invalid or truncated file content');
+    }
 
     if (detected?.mime) {
       const real = normalizeMime(detected.mime);
       if (claimed && claimed !== real) {
-        throw new BadRequestException(
-          'File content does not match Content-Type',
-        );
+        throw new BadRequestException('File content does not match Content-Type');
       }
       if (!this.allowedMimes.has(real)) {
         throw new BadRequestException('Unsupported file type');
@@ -128,9 +124,7 @@ export class UploadService implements OnModuleInit {
     if (claimed === 'text/plain' && this.allowedMimes.has('text/plain')) {
       // Reject obvious binary pretending to be text
       if (file.buffer.includes(0)) {
-        throw new BadRequestException(
-          'File content does not match Content-Type',
-        );
+        throw new BadRequestException('File content does not match Content-Type');
       }
       return 'text/plain';
     }
@@ -143,9 +137,7 @@ export class UploadService implements OnModuleInit {
       throw new BadRequestException('file is required');
     }
     if (file.size > this.maxBytes) {
-      throw new PayloadTooLargeException(
-        `File too large (max ${this.maxBytes} bytes)`,
-      );
+      throw new PayloadTooLargeException(`File too large (max ${this.maxBytes} bytes)`);
     }
 
     const mime = await this.resolveMime(file);
@@ -168,10 +160,7 @@ export class UploadService implements OnModuleInit {
       contentType: mime,
     });
 
-    const sha = createHash('sha256')
-      .update(file.buffer)
-      .digest('hex')
-      .slice(0, 12);
+    const sha = createHash('sha256').update(file.buffer).digest('hex').slice(0, 12);
     this.logger.debug(`saved ${key} sha256=${sha} mime=${mime}`);
 
     this.audit.record({
