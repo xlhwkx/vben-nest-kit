@@ -32,7 +32,7 @@ function readFlag(config: ConfigService, key: string): boolean {
  * - Default: CAPTCHA_REQUIRED=false → login stays username+password (api-contract).
  * - CAPTCHA_REQUIRED=true → login must present a one-time challenge from issueChallenge().
  * - CAPTCHA_E2E_BYPASS=1 → skips verification (tests / headless only; never production).
- * Frontend SliderCaptcha remains the production UX; VITE_CAPTCHA_E2E_BYPASS mirrors this.
+ * The admin fetches tickets when VITE_CAPTCHA_REQUIRED=true. Tickets do not verify humans.
  *
  * Flags prefer live process.env so e2e can toggle without re-booting Nest
  * (ConfigModule validate() may be sticky within one Jest process).

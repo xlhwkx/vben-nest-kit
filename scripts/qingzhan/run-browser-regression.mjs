@@ -4,8 +4,8 @@ import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
 
-const app = process.env.AUTH_BROWSER_APP ?? 'playground';
-assert.ok(['playground', 'web-antd'].includes(app), 'Unsupported browser app');
+const app = process.env.AUTH_BROWSER_APP ?? 'admin';
+assert.equal(app, 'admin', 'Unsupported browser app');
 assert.equal(
   process.env.AUTH_BROWSER_ALLOW_MUTATION,
   'true',
@@ -16,7 +16,7 @@ assert.equal(
   'test',
   'Browser runner requires NODE_ENV=test',
 );
-const port = app === 'playground' ? 5555 : 5666;
+const port = 5555;
 const frontend = `http://127.0.0.1:${port}`;
 const api = 'http://127.0.0.1:5320/api';
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -160,12 +160,7 @@ try {
       String(port),
       '--strictPort',
     ],
-    fileURLToPath(
-      new URL(
-        app === 'playground' ? '../../playground/' : '../../apps/web-antd/',
-        import.meta.url,
-      ),
-    ),
+    fileURLToPath(new URL('../../apps/admin/', import.meta.url)),
   );
   await Promise.all([
     ready(`${api}/v1/health/ready`, backend),

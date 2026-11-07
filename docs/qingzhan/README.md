@@ -1,11 +1,12 @@
 # 青栈文档（Qingzhan）
 
-本目录是**青栈**（`apps/server` Nest 后端）的架构与贡献说明。上游 Vben VitePress 仍在 `docs/src`，互不影响。
+本目录记录青栈单管理端（`apps/admin`）与 Nest 后端（`apps/server`）的架构、开发与验收。产品文档站为 `docs-site`，上游组件文档请查阅 https://doc.vben.pro。
 
 | 文档 | 中文 | English |
 | --- | --- | --- |
 | 架构 | [architecture.md](./architecture.md) | [architecture.en.md](./architecture.en.md) |
 | 贡献指南 | [contributing.md](./contributing.md) | [contributing.en.md](./contributing.en.md) |
+| 单前端迁移 | [single-admin-migration.md](./single-admin-migration.md) | — |
 | 生产部署 | [deploy.md](./deploy.md) | — |
 | 生产交付与验收 | [production-acceptance.md](./production-acceptance.md) | — |
 | 第十三轮交付记录 | [production-delivery-phase13-2026-11-07.md](./production-delivery-phase13-2026-11-07.md) | — |

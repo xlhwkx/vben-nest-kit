@@ -11,7 +11,7 @@ Agents should rely on the in-repo skill plus contracts to avoid envelope/auth pi
 
 1. Read API contract + tech plan (contract wins on conflict).
 2. Skim `docs/qingzhan/architecture.md`; ops → deploy / backup / observability.
-3. Code lands in `apps/server`; wire `apps/web-antd`; do not touch unrelated apps.
+3. Code lands in `apps/server`; wire `apps/admin`; do not touch unrelated apps.
 4. Scope a small slice and acceptance (paths / envelope / refresh exception / no password).
 5. Local: `docker compose up -d` → Nest `:5320` → optional `pnpm dev:antd` `:5666` → health.
 6. Review packet includes **skill path**, files changed, contract check, probes/tests.

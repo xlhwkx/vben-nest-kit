@@ -60,7 +60,7 @@ Requires Compose + `.env` + seed. Node engines: `^22.18 || ^24.12` (tests use `-
 
 Repo already sets `VITE_NITRO_MOCK=false`, `accessMode: 'backend'`, and proxy to Nest. Clear localStorage after preference changes.
 
-Use `pnpm dev:admin` for the management pages (playground, http://localhost:5555). `pnpm dev:antd` provides the other UI integration example (http://localhost:5666). Clean machines need a full root `pnpm install --frozen-lockfile`, including postinstall stubs. If `@vben/vite-config` cannot resolve, finish installing and run `pnpm -r run --if-present stub`. See the root README for setup and the [acceptance runbook](./production-acceptance.md) for delivery commands and evidence requirements.
+Use `pnpm dev` for the only admin at `apps/admin` (http://localhost:5555), and `pnpm dev:server` for Nest. Install once from the root with `pnpm install --frozen-lockfile`, including postinstall stubs. See the [acceptance runbook](./production-acceptance.md).
 
 ## Safety
 

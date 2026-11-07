@@ -1,7 +1,7 @@
 {
   "name": "@qingzhan/server",
   "version": "0.1.0",
-  "description": "青栈 NestJS 后端（替换 Vben backend-mock）",
+  "description": "青栈 NestJS 后端",
   "author": "xlhwkx",
   "private": true,
   "license": "MIT",

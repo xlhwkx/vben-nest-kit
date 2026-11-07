@@ -18,10 +18,10 @@ Swagger UI（非 production 默认开；生产设 `SWAGGER_ENABLED=true` 强制�
 
 ## 与管理前端联调
 
-完整管理页面使用 playground；web-antd 保留认证/路由 UI 接入示例（见仓库根 `README.md`）：
+唯一管理前端位于 `apps/admin`（见仓库根 `README.md`）：
 
 1. 本服务监听 `5320`（`pnpm start:dev`）
-2. 根目录 `pnpm dev:admin` → localhost:5555（`VITE_NITRO_MOCK=false`，proxy → `http://localhost:5320/api`）；另一套 UI 用 `pnpm dev:antd` → localhost:5666
+2. 根目录 `pnpm dev:admin` → localhost:5555（`VITE_NITRO_MOCK=false`，proxy → `http://localhost:5320/api`）
 3. Demo：`vben` / `admin` / `jack`，密码 `123456`
 
 登录、刷新、退出会检查浏览器 `Origin`：只允许 `CORS_ORIGINS` 中的源，以及 `APP_PUBLIC_URL` 的源。开发代理也须保留并配置实际前端源；白名单使用完整 HTTP(S) 源，不含路径或通配符。拒绝返回 403，不写 Cookie、不修改认证会话。不带 Origin 的 CLI/服务端客户端保持兼容；缺少 Origin 且 `Sec-Fetch-Site=cross-site` 的请求拒绝。来源检查不能替代身份认证，也不能防御受信任前端上的 XSS。
@@ -63,20 +63,20 @@ pnpm test:e2e
 
 ## 浏览器认证回归
 
-仓库根执行 `pnpm test:auth:browser`，使用已安装的 Playwright Chromium，调用真实 Vite 前端认证模块和真实 Nest API。执行前启动一个隔离、完成迁移和测试账号初始化的 API，以及 web-antd 或 playground 的 Vite 服务；前端 `VITE_NITRO_MOCK=false`，`VITE_GLOB_API_URL` 必须指向该 API。
+仓库根执行 `pnpm test:auth:browser`，使用已安装的 Playwright Chromium，调用真实 Vite 前端认证模块和真实 Nest API。执行前启动一个隔离、完成迁移和测试账号初始化的 API，以及 apps/admin 的 Vite 服务；前端 `VITE_NITRO_MOCK=false`，`VITE_GLOB_API_URL` 必须指向该 API。
 
 命令要求显式设置四个环境变量，没有默认目标或账号：
 
 | 变量 | 示例/用途 |
 | --- | --- |
-| AUTH_BROWSER_FRONTEND_URL | `http://127.0.0.1:5666`，Vite 前端地址 |
+| AUTH_BROWSER_FRONTEND_URL | `http://127.0.0.1:5555`，Vite 前端地址 |
 | AUTH_BROWSER_API_URL | `http://127.0.0.1:5320/api`，须与前端不同 origin，且在服务端 CORS 中允许前端 origin |
 | AUTH_BROWSER_USERNAME | 隔离环境测试账号 |
 | AUTH_BROWSER_PASSWORD | 对应测试密码，不提交到仓库 |
 
 本地回环地址可测试 HTTP + SameSite=Lax；生产需按真实 HTTPS、Secure/SameSite 和浏览器 Cookie 政策验收。用全新浏览器上下文测试跨域登录 Cookie、确定的双标签页锁等待、延迟失败响应、被动重新认证不注销其他标签页，以及显式注销。测试主动制造一个 401/refresh 403 来验证客户端失败分支，其他认证请求访问真实 API；它不是完整管理页面 UI 验收，目前也未接入远端 CI。
 
-web-antd 与 playground 均默认开启自动续期。旧浏览器偏好缓存可能覆盖新的默认值，已有用户需确认该偏好。Web Locks 只覆盖相同前端 origin 且支持该 API 的浏览器；降级路径不保证跨标签页串行，但服务端失败响应仍不会清除其他请求的新 Cookie。详见[第九轮记录](../../docs/qingzhan/production-hardening-phase9-2026-11-07.md)。
+管理端默认开启自动续期。旧浏览器偏好缓存可能覆盖新的默认值，已有用户需确认该偏好。Web Locks 只覆盖相同前端 origin 且支持该 API 的浏览器；降级路径不保证跨标签页串行，但服务端失败响应仍不会清除其他请求的新 Cookie。详见[第九轮记录](../../docs/qingzhan/production-hardening-phase9-2026-11-07.md)。
 
 ## 压测烟测（企业稳态③）
 
@@ -93,7 +93,7 @@ pnpm test:load:smoke
 
 见 [首批生产加固记录](../../docs/qingzhan/production-hardening-2026-11-07.md)，包含权限数据迁移、安全管理员初始化、代理配置与本批验证边界。生产环境禁止演示 seed。
 
-[第十轮菜单与编辑版本修复](../../docs/qingzhan/production-hardening-phase10-2026-11-07.md) 新增管理编辑版本迁移。用户/角色/菜单 PUT 必须携带列表读取的 `version`，旧版本返回 409；playground 表单与状态切换已配套修改。更新时可选菜单字段省略保留、meta 显式对象整体替换；角色页面授权必须显式包含祖先。旧客户端需要同步升级，历史缺祖先授权需要管理员复核；迁移不自动扩大权限。完整语义见 [API 合同](../../规则/api-contract-vben.md)。
+[第十轮菜单与编辑版本修复](../../docs/qingzhan/production-hardening-phase10-2026-11-07.md) 新增管理编辑版本迁移。用户/角色/菜单 PUT 必须携带列表读取的 `version`，旧版本返回 409；管理端表单与状态切换已配套修改。更新时可选菜单字段省略保留、meta 显式对象整体替换；角色页面授权必须显式包含祖先。旧客户端需要同步升级，历史缺祖先授权需要管理员复核；迁移不自动扩大权限。完整语义见 [API 合同](../../规则/api-contract-vben.md)。
 
 后续记录：[授权事务与真实环境验证](../../docs/qingzhan/production-hardening-phase2-2026-11-07.md)、[输入边界与分页兼容性](../../docs/qingzhan/production-hardening-phase3-2026-11-07.md)。管理分页现在会拒绝非法值和超过 100 的 pageSize，客户端应遵循更新后的参数约定。
 

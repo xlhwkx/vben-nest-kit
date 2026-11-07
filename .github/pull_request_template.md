@@ -1,33 +1,12 @@
-## Description
+## 变更
 
-<!-- Please describe the change as necessary. If it's a feature or enhancement please be as detailed as possible. If it's a bug fix, please link the issue that it fixes or describe the bug in as much detail.
+说明问题、修改后的行为，以及是否影响 API、数据库迁移、部署路径或权限。
 
- -->
+## 验证
 
-<!-- You can also add additional context here -->
+记录针对本提交执行的检查与结果，区分静态检查、隔离 CI 和目标环境验收。无法执行的检查注明原因，不引用旧提交的成功状态。
 
-## Type of change
-
-Please delete options that are not relevant.
-
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] This change requires a documentation update
-- [ ] Please, don't make changes to `pnpm-lock.yaml` unless you introduce a new test example.
-
-## Checklist
-
-> ℹ️ Check all checkboxes - this will indicate that you have done everything in accordance with the rules in [CONTRIBUTING](contributing.md).
-
-- [ ] If you introduce new functionality, document it. You can run documentation with `pnpm run docs:dev` command.
-- [ ] Run the tests with `pnpm test`.
-- [ ] Changes in changelog are generated from PR name. Please, make sure that it explains your changes in an understandable manner. Please, prefix changeset messages with `feat:`, `fix:`, `perf:`, `docs:`, or `chore:`.
-- [ ] My code follows the style guidelines of this project
-- [ ] I have performed a self-review of my own code
-- [ ] I have commented my code, particularly in hard-to-understand areas
-- [ ] I have made corresponding changes to the documentation
-- [ ] My changes generate no new warnings
-- [ ] I have added tests that prove my fix is effective or that my feature works
-- [ ] New and existing unit tests pass locally with my changes
-- [ ] Any dependent changes have been merged and published in downstream modules
+- [ ] `pnpm check:starter`、交付类型与相关 lint
+- [ ] 对应功能回归、后端 E2E、管理端浏览器检查与交付构建
+- [ ] 未提交本地环境、密钥、上传数据或日志
+- [ ] 更新 API 合同、迁移或部署文档（如适用）

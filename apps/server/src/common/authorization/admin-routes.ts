@@ -1,6 +1,6 @@
 import type { Prisma } from '../../generated/prisma/client';
 
-/** The supported Qingzhan frontend lives in playground/src/views/system. */
+/** The supported Qingzhan frontend lives in apps/admin/src/views/system. */
 export const ADMIN_ROUTES = [
   {
     name: 'SystemUser',

@@ -21,7 +21,6 @@ dev-dist
 yarn.lock
 package-lock.json
 .VSCodeCounter
-**/backend-mock/data
 .omx
 .pnpm-store
 # local env files
@@ -69,6 +68,7 @@ datalog
 .env*.production
 **/.env.production
 **/.env*.production
+!apps/admin/.env.production
 apps/server/dist
 apps/server/coverage
 *.tsbuildinfo

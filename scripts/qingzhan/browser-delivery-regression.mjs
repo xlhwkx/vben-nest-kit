@@ -15,7 +15,7 @@ assert.equal(
   'Use a disposable database only',
 );
 const app = required('AUTH_BROWSER_APP');
-assert.ok(['playground', 'web-antd'].includes(app));
+assert.equal(app, 'admin');
 const frontend = required('AUTH_BROWSER_FRONTEND_URL').replace(/\/$/u, '');
 const api = required('AUTH_BROWSER_API_URL').replace(/\/$/u, '');
 assert.notEqual(new URL(frontend).origin, new URL(api).origin);
@@ -111,10 +111,29 @@ try {
       contentType: 'application/json',
       body: '{}',
     });
-  cleanupToken = await signIn(a, primary);
+  // The starter must authenticate through its real, initially empty login form.
+  assert.equal(await a.locator('input[name="username"]').inputValue(), '');
+  assert.equal(await a.locator('input[name="password"]').inputValue(), '');
+  await a.locator('input[name="username"]').fill(primary.username);
+  await a.locator('input[name="password"]').fill(primary.password);
+  const [loginResponse] = await Promise.all([
+    a.waitForResponse(
+      (response) =>
+        response.url() === `${api}/auth/login` &&
+        response.request().method() === 'POST',
+    ),
+    a.locator('input[name="password"]').press('Enter'),
+  ]);
+  assert.equal(loginResponse.status(), 200);
+  await a.locator('[data-layout-region="layout"]').waitFor();
+  cleanupToken = await a.evaluate(async (stores) => {
+    const { useAccessStore } = await import(stores);
+    return useAccessStore().accessToken;
+  }, stores);
+  assert.ok(cleanupToken);
 
   // Verify the supported management pages actually invoke the real API.
-  if (app === 'playground') {
+  if (app === 'admin') {
     const failedRoleReads = [];
     a.on('response', (response) => {
       if (
@@ -426,8 +445,8 @@ try {
   console.log(
     JSON.stringify({
       app,
-      managementPages:
-        app === 'playground' ? 6 : 'outside this UI example scope',
+      managementPages: 6,
+      realLoginForm: true,
       staleWriteBlocked: true,
       queuedReplayBlocked: true,
       expectedUserIdEnforced: true,

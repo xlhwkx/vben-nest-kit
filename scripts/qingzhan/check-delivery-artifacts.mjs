@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { assertBackendConfig } from '../../internal/vite-config/src/utils/backend-config.ts';
 
-for (const app of ['playground', 'apps/web-antd']) {
+for (const app of ['apps/admin']) {
   const root = new URL(`../../${app}/dist/`, import.meta.url);
   const entries = await readdir(root);
   const files = entries.filter((name) => /^_app-config-.*\.js$/u.test(name));

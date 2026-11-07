@@ -6,7 +6,7 @@
 
 | 层 | 选型 |
 | --- | --- |
-| 前端 | 完整管理页面 playground；web-antd 为 UI 接入示例。均为 `accessMode: backend`、`VITE_NITRO_MOCK=false` |
+| 前端 | `apps/admin` 是唯一管理前端，Vue 3 + antdv-next，使用后端动态权限与真实 API |
 | 后端 | NestJS 12 + Express（`apps/server` / `@qingzhan/server`） |
 | ORM / DB | Prisma 7 + PostgreSQL |
 | 缓存 / 限流存储 | Redis 7（`ioredis`） |
@@ -31,7 +31,7 @@ Auth · User · Menu · System（用户/角色/菜单/部门/字典）· Upload 
 ## 本地端口
 
 - Nest：`5320`
-- playground dev：`5555`（完整管理入口，vite proxy → Nest）；web-antd 示例：`5666`
+- 管理端 dev：`5555`（`apps/admin`，Vite proxy → Nest）
 - Compose Postgres / Redis：见 `apps/server/.env.example`（宿主映射避开本机常用口）
 - 生产容器部署：`docs/qingzhan/deploy.md`（`compose.prod.yml` + `apps/server/Dockerfile`）
 
@@ -44,7 +44,7 @@ Auth · User · Menu · System（用户/角色/菜单/部门/字典）· Upload 
 - **审计**：login 成功/失败/锁定、logout、敏感写、upload 等异步 `record`；列表需 `System:Audit:List`；响应头 `x-request-id`。
 - **上传**：`StorageProvider`（local 默认 / s3 可选）+ UUID；MIME 白名单 + **magic-bytes**（`file-type`）；默认无 SVG；`nosniff`；multer 上限对齐 `UPLOAD_MAX_BYTES`。
 - **队列**：`QueueModule` + BullMQ（mail / audit-archive）；默认关闭；`MAIL_DRIVER=console|smtp`（默认 console，smtp 仅 dry-run）。实现名 `MailProvider`，技术方案 §26 称 `MailSender`（类型别名已对齐）。
-- **验证码票据**：web-antd 接入示例保留 **SliderCaptcha**；服务端默认不强制。`CAPTCHA_REQUIRED=true` 要求提交 `GET /api/auth/captcha` 返回的票据，以 Redis GETDEL 保证只消费一次；存储不可用返回 503。该公开票据本身不验证人类动作，不能作为服务端反机器人能力。前端 `VITE_CAPTCHA_REQUIRED=true` 会先拉票再登录；服务端 `CAPTCHA_E2E_BYPASS` 仅测试可用，生产禁止；青栈 Vite 配置在所有 mode 拒绝前端旁路。
+- **验证码票据**：服务端默认不强制；`CAPTCHA_REQUIRED=true` 时，前端需设置 `VITE_CAPTCHA_REQUIRED=true`，每次登录先获取并提交公开的一次性票据。它不验证人类动作，不是反机器人能力。生产禁止验证码旁路。
 
 ## API 覆盖备注（相对 mock）
 
@@ -55,7 +55,7 @@ Auth · User · Menu · System（用户/角色/菜单/部门/字典）· Upload 
 
 - 对象存储生产运维（MinIO Compose 一键 / 生命周期策略等仍可选）
 - BullMQ 独立 worker 进程与生产 SMTP 投递（已有 console/smtp dry-run 骨架，默认不连外网）
-- 已新增双 UI 的 Playwright 认证/安全联调 CI；真实运行和正式 dist 的 HTTPS 站点验收仍待完成，见[验收指南](./production-acceptance.md)
+- 已新增单管理端 的 Playwright 认证/安全联调 CI；真实运行和正式 dist 的 HTTPS 站点验收仍待完成，见[验收指南](./production-acceptance.md)
 - OAuth / 多租户 / 完整 Clean Architecture
 
 ## 人工冒烟（§11）

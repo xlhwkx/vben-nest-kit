@@ -64,7 +64,6 @@ docker build -f apps/server/Dockerfile -t qingzhan-server:local .
 
 生产：**配 `METRICS_TOKEN` 或设 `METRICS_ENABLED=false`**。抓取仅内网 / sidecar。见 observability 文档。
 
-
 ## 备份与迁移演练
 
 生产发版前至少在演练库跑一遍：`docs/qingzhan/backup-migrate.md`（`pg_dump`/`pg_restore`、Prisma `migrate deploy` 纪律、Redis 可重建说明、勾选清单）。
@@ -78,7 +77,7 @@ pnpm test:load:smoke
 
 ## 与前端
 
-完整管理前端使用 playground（`pnpm build:admin`，发布 `playground/dist`）；web-antd 是另一套 UI 的认证/路由接入示例。两者 `accessMode: backend`，生产默认 API 为同源 `/api`。初始化管理员、已有库补管理入口、静态站点代理和回归门槛见[生产验收指南](./production-acceptance.md)。
+唯一管理前端位于 `apps/admin`（`pnpm build:admin`，发布 `apps/admin/dist`），使用后端权限与真实 API，生产默认同源 `/api`。初始化、代理和回归门槛见[生产验收指南](./production-acceptance.md)。
 
 ## 上传与对象存储预算
 
