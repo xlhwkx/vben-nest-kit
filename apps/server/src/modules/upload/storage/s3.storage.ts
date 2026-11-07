@@ -2,22 +2,16 @@ import {
   Injectable,
   Logger,
   OnModuleInit,
+  OnModuleDestroy,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  PutObjectCommand,
-  S3Client,
-} from '@aws-sdk/client-s3';
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { assertSafeObjectKey } from './object-key';
-import type {
-  PutObjectInput,
-  PutObjectResult,
-  StorageProvider,
-} from './storage.types';
+import type { PutObjectInput, PutObjectResult, StorageProvider } from './storage.types';
 
 @Injectable()
-export class S3StorageProvider implements StorageProvider, OnModuleInit {
+export class S3StorageProvider implements StorageProvider, OnModuleInit, OnModuleDestroy {
   readonly driver = 's3' as const;
   private readonly logger = new Logger(S3StorageProvider.name);
   private client!: S3Client;
@@ -32,8 +26,7 @@ export class S3StorageProvider implements StorageProvider, OnModuleInit {
     const bucket = this.config.get<string>('S3_BUCKET');
     const accessKeyId = this.config.get<string>('S3_ACCESS_KEY_ID');
     const secretAccessKey = this.config.get<string>('S3_SECRET_ACCESS_KEY');
-    const forcePathStyle =
-      this.config.get<boolean>('S3_FORCE_PATH_STYLE') ?? true;
+    const forcePathStyle = this.config.get<boolean>('S3_FORCE_PATH_STYLE') ?? true;
 
     if (!bucket || !accessKeyId || !secretAccessKey) {
       throw new Error(
@@ -61,9 +54,7 @@ export class S3StorageProvider implements StorageProvider, OnModuleInit {
       this.publicBaseUrl = `https://${bucket}.s3.${region}.amazonaws.com`;
     }
 
-    this.logger.log(
-      `S3 storage ready: bucket=${bucket} endpoint=${endpoint || 'aws-default'}`,
-    );
+    this.logger.log(`S3 storage ready: bucket=${bucket} endpoint=${endpoint || 'aws-default'}`);
   }
 
   async put(input: PutObjectInput): Promise<PutObjectResult> {
@@ -76,11 +67,20 @@ export class S3StorageProvider implements StorageProvider, OnModuleInit {
           Body: input.body,
           ContentType: input.contentType,
         }),
+        {
+          abortSignal: AbortSignal.timeout(
+            this.config.get<number>('S3_UPLOAD_TIMEOUT_MS') ?? 15_000,
+          ),
+        },
       );
-    } catch (err) {
-      this.logger.error(`S3 put failed: ${String(err)}`);
+    } catch (error) {
+      this.logger.error(`S3 put failed: ${String(error)}`);
       throw new ServiceUnavailableException('Object storage unavailable');
     }
     return { url: `${this.publicBaseUrl}/${safeKey}` };
+  }
+
+  onModuleDestroy(): void {
+    this.client?.destroy();
   }
 }

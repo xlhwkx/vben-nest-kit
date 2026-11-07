@@ -1,3 +1,19 @@
+import { assertRouteAncestors } from '../../../common/authorization/menu-ancestors';
+import { assertEditClaim, parseEditVersion } from '../../../common/validation/edit-version';
+import {
+  listQuerySchema,
+  withListOffsetLimit,
+  listOffsetError,
+} from '../../../common/validation/list-query';
+import {
+  parseQuery,
+  optionalQueryText,
+  optionalQueryId,
+  optionalQueryEnum,
+} from '../../../common/validation/request-validation';
+import { authorizationMutation } from '../../../common/authorization/authorization-mutation';
+import type { AuthUser } from '../../../common/decorators/current-user.decorator';
+import { assertGrantableMenus } from '../../../common/authorization/permission-codes';
 import {
   Injectable,
   BadRequestException,
@@ -6,12 +22,12 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '../../../generated/prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { RedisService } from '../../../redis/redis.service';
 import { AuditService } from '../../audit/audit.service';
 import { parseListCreatedAtRange } from '../../../common/parse-list-time-range';
 import { formatCreateTimeIso } from '../../../common/format-create-time';
 
 export type SystemRoleItem = {
+  version: number;
   id: string;
   name: string;
   code: string;
@@ -30,6 +46,7 @@ export type SystemRoleCreateInput = {
 };
 
 export type SystemRoleUpdateInput = {
+  version: number;
   name?: string;
   code?: string;
   status?: number;
@@ -63,24 +80,27 @@ function slugRoleCode(name: string): string {
   return `role_${Date.now().toString(36)}`;
 }
 
-function parsePage(v: number | string | undefined, fallback: number): number {
-  const n = Number.parseInt(String(v ?? fallback), 10);
-  if (!Number.isFinite(n) || n < 1) return fallback;
-  return n;
-}
+const roleListSchema = listQuerySchema
+  .extend({
+    name: optionalQueryText(128),
+    remark: optionalQueryText(512),
+    startTime: optionalQueryText(64),
+    endTime: optionalQueryText(64),
+    id: optionalQueryId,
+    status: optionalQueryEnum([0, 1]),
+  })
+  .refine(withListOffsetLimit, listOffsetError);
 
 @Injectable()
 export class SystemRoleService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly redis: RedisService,
     private readonly audit: AuditService,
   ) {}
 
-  async list(query: SystemRoleListQuery): Promise<{ items: SystemRoleItem[]; total: number }> {
-    const page = parsePage(query.page, 1);
-    let pageSize = parsePage(query.pageSize, 20);
-    if (pageSize > 100) pageSize = 100;
+  async list(rawQuery: SystemRoleListQuery): Promise<{ items: SystemRoleItem[]; total: number }> {
+    const query = parseQuery(roleListSchema, rawQuery);
+    const { page, pageSize } = query;
 
     const where: Prisma.RoleWhereInput = {};
 
@@ -93,18 +113,76 @@ export class SystemRoleService {
     if (query.remark?.trim()) {
       where.remark = { contains: query.remark.trim(), mode: 'insensitive' };
     }
-    if (query.status === 0 || query.status === '0' || query.status === 1 || query.status === '1') {
-      where.status = Number(query.status);
-    }
+    if (query.status !== undefined) where.status = query.status;
     const createdAt = parseListCreatedAtRange(query.startTime, query.endTime);
     if (createdAt) where.createdAt = createdAt;
 
-    const total = await this.prisma.role.count({ where });
-    const rows = await this.prisma.role.findMany({
-      where,
-      orderBy: [{ createdAt: 'desc' }, { name: 'asc' }],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
+    // The scalar revision and relation ids must come from the same DB snapshot.
+    return this.prisma.$transaction(
+      async (tx) => {
+        const total = await tx.role.count({ where });
+        const rows = await tx.role.findMany({
+          where,
+          orderBy: [{ createdAt: 'desc' }, { name: 'asc' }, { id: 'asc' }],
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+          include: {
+            menus: {
+              where: { menu: { deletedAt: null } },
+              select: { menuId: true },
+            },
+          },
+        });
+
+        return { items: rows.map((row) => this.toItem(row)), total };
+      },
+      { isolationLevel: 'RepeatableRead' },
+    );
+  }
+
+  async create(input: SystemRoleCreateInput, actor: AuthUser): Promise<SystemRoleItem> {
+    return authorizationMutation(this.prisma, actor, 'System:Role:Create', (tx) =>
+      this.createAuthorized(input, actor.userId, tx),
+    );
+  }
+
+  private async createAuthorized(
+    input: SystemRoleCreateInput,
+    actorId: string,
+    db: Prisma.TransactionClient,
+  ): Promise<SystemRoleItem> {
+    const name = input.name?.trim();
+    if (!name) throw new BadRequestException('name is required');
+    let code = input.code?.trim() || slugRoleCode(name);
+    const dupCode = await db.role.findUnique({ where: { code } });
+    if (dupCode) {
+      if (input.code?.trim()) {
+        throw new ConflictException('Role code already exists');
+      }
+      code = `${code}_${Date.now().toString(36)}`.slice(0, 64);
+    }
+
+    await assertGrantableMenus(db, actorId, {
+      id: { in: input.permissions ?? [] },
+    });
+    const menuIds = await this.validateMenuIds(input.permissions ?? [], db);
+
+    const role = await db.role.create({
+      data: {
+        name,
+        code,
+        status: input.status === 0 ? 0 : 1,
+        remark: input.remark?.trim() || null,
+      },
+    });
+    if (menuIds.length > 0) {
+      await db.roleMenu.createMany({
+        data: menuIds.map((menuId) => ({ roleId: role.id, menuId })),
+        skipDuplicates: true,
+      });
+    }
+    const row = await db.role.findUniqueOrThrow({
+      where: { id: role.id },
       include: {
         menus: {
           where: { menu: { deletedAt: null } },
@@ -113,50 +191,8 @@ export class SystemRoleService {
       },
     });
 
-    return { items: rows.map((row) => this.toItem(row)), total };
-  }
-
-  async create(input: SystemRoleCreateInput): Promise<SystemRoleItem> {
-    const name = input.name?.trim();
-    if (!name) throw new BadRequestException('name is required');
-    let code = input.code?.trim() || slugRoleCode(name);
-    const dupCode = await this.prisma.role.findUnique({ where: { code } });
-    if (dupCode) {
-      if (input.code?.trim()) {
-        throw new ConflictException('Role code already exists');
-      }
-      code = `${code}_${Date.now().toString(36)}`.slice(0, 64);
-    }
-
-    const menuIds = await this.validateMenuIds(input.permissions ?? []);
-
-    const row = await this.prisma.$transaction(async (tx) => {
-      const role = await tx.role.create({
-        data: {
-          name,
-          code,
-          status: input.status === 0 ? 0 : 1,
-          remark: input.remark?.trim() || null,
-        },
-      });
-      if (menuIds.length > 0) {
-        await tx.roleMenu.createMany({
-          data: menuIds.map((menuId) => ({ roleId: role.id, menuId })),
-          skipDuplicates: true,
-        });
-      }
-      return tx.role.findUniqueOrThrow({
-        where: { id: role.id },
-        include: {
-          menus: {
-            where: { menu: { deletedAt: null } },
-            select: { menuId: true },
-          },
-        },
-      });
-    });
-
-    this.audit.record({
+    await this.audit.recordInTransaction(db, {
+      userId: actorId,
       action: 'system.role.create',
       module: 'system.role',
       status: 200,
@@ -165,8 +201,32 @@ export class SystemRoleService {
     return this.toItem(row);
   }
 
-  async update(id: string, input: SystemRoleUpdateInput): Promise<SystemRoleItem> {
-    const existing = await this.requireRole(id);
+  async update(id: string, input: SystemRoleUpdateInput, actor: AuthUser): Promise<SystemRoleItem> {
+    parseEditVersion(input.version);
+    return authorizationMutation(this.prisma, actor, 'System:Role:Update', (tx) =>
+      this.updateAuthorized(id, input, actor.userId, tx),
+    );
+  }
+
+  private async updateAuthorized(
+    id: string,
+    input: SystemRoleUpdateInput,
+    actorId: string,
+    db: Prisma.TransactionClient,
+  ): Promise<SystemRoleItem> {
+    await assertGrantableMenus(db, actorId, {
+      roles: { some: { roleId: id } },
+    });
+    if (input.permissions !== undefined)
+      await assertGrantableMenus(db, actorId, {
+        id: { in: input.permissions },
+      });
+    const existing = await this.requireRole(id, db);
+    const claim = await db.role.updateMany({
+      where: { id, version: input.version },
+      data: { version: { increment: 1 } },
+    });
+    assertEditClaim(claim.count);
 
     const data: Prisma.RoleUpdateInput = {};
     if (input.name !== undefined) {
@@ -178,7 +238,7 @@ export class SystemRoleService {
       const code = input.code.trim();
       if (!code) throw new BadRequestException('code is required');
       if (code !== existing.code) {
-        const dupCode = await this.prisma.role.findUnique({ where: { code } });
+        const dupCode = await db.role.findUnique({ where: { code } });
         if (dupCode) throw new ConflictException('Role code already exists');
         data.code = code;
       }
@@ -193,38 +253,33 @@ export class SystemRoleService {
     // Only replace RoleMenu when permissions is explicitly present (incl. []).
     const hasPermissionsField = input.permissions !== undefined;
     const menuIds = hasPermissionsField
-      ? await this.validateMenuIds(input.permissions ?? [])
+      ? await this.validateMenuIds(input.permissions ?? [], db)
       : null;
 
-    const row = await this.prisma.$transaction(async (tx) => {
-      if (Object.keys(data).length > 0) {
-        await tx.role.update({ where: { id }, data });
+    if (Object.keys(data).length > 0) {
+      await db.role.update({ where: { id }, data });
+    }
+    if (menuIds !== null) {
+      await db.roleMenu.deleteMany({ where: { roleId: id } });
+      if (menuIds.length > 0) {
+        await db.roleMenu.createMany({
+          data: menuIds.map((menuId) => ({ roleId: id, menuId })),
+          skipDuplicates: true,
+        });
       }
-      if (menuIds !== null) {
-        await tx.roleMenu.deleteMany({ where: { roleId: id } });
-        if (menuIds.length > 0) {
-          await tx.roleMenu.createMany({
-            data: menuIds.map((menuId) => ({ roleId: id, menuId })),
-            skipDuplicates: true,
-          });
-        }
-      }
-      return tx.role.findUniqueOrThrow({
-        where: { id },
-        include: {
-          menus: {
-            where: { menu: { deletedAt: null } },
-            select: { menuId: true },
-          },
+    }
+    const row = await db.role.findUniqueOrThrow({
+      where: { id },
+      include: {
+        menus: {
+          where: { menu: { deletedAt: null } },
+          select: { menuId: true },
         },
-      });
+      },
     });
 
-    if ((input.status === 0 || input.status === 1) && input.status !== existing.status) {
-      await this.clearPermCacheForRole(id);
-    }
-
-    this.audit.record({
+    await this.audit.recordInTransaction(db, {
+      userId: actorId,
       action: 'system.role.update',
       module: 'system.role',
       status: 200,
@@ -233,18 +288,31 @@ export class SystemRoleService {
     return this.toItem(row);
   }
 
-  async remove(id: string): Promise<{ id: string }> {
-    await this.requireRole(id);
-    const assigned = await this.prisma.userRole.count({
+  async remove(id: string, actor: AuthUser): Promise<{ id: string }> {
+    return authorizationMutation(this.prisma, actor, 'System:Role:Delete', (tx) =>
+      this.removeAuthorized(id, actor.userId, tx),
+    );
+  }
+
+  private async removeAuthorized(
+    id: string,
+    actorId: string,
+    db: Prisma.TransactionClient,
+  ): Promise<{ id: string }> {
+    await assertGrantableMenus(db, actorId, {
+      roles: { some: { roleId: id } },
+    });
+    await this.requireRole(id, db);
+    const assigned = await db.userRole.count({
       where: { roleId: id },
     });
     if (assigned > 0) {
       throw new ConflictException('Role has users assigned; unassign first');
     }
 
-    await this.clearPermCacheForRole(id);
-    await this.prisma.role.delete({ where: { id } });
-    this.audit.record({
+    await db.role.delete({ where: { id } });
+    await this.audit.recordInTransaction(db, {
+      userId: actorId,
       action: 'system.role.delete',
       module: 'system.role',
       status: 200,
@@ -254,6 +322,7 @@ export class SystemRoleService {
   }
 
   private toItem(row: {
+    version: number;
     id: string;
     name: string;
     code: string;
@@ -263,6 +332,7 @@ export class SystemRoleService {
     menus: { menuId: string }[];
   }): SystemRoleItem {
     const item: SystemRoleItem = {
+      version: row.version,
       id: row.id,
       name: row.name,
       code: row.code,
@@ -274,30 +344,20 @@ export class SystemRoleService {
     return item;
   }
 
-  private async requireRole(id: string) {
-    const row = await this.prisma.role.findUnique({ where: { id } });
+  private async requireRole(id: string, db: Prisma.TransactionClient) {
+    const row = await db.role.findUnique({ where: { id } });
     if (!row) throw new NotFoundException('Role not found');
     return row;
   }
 
-  private async validateMenuIds(ids: string[]): Promise<string[]> {
+  private async validateMenuIds(ids: string[], db: Prisma.TransactionClient): Promise<string[]> {
     const unique = [...new Set((ids ?? []).map((x) => String(x).trim()).filter(Boolean))];
     if (unique.length === 0) return [];
-    const found = await this.prisma.menu.findMany({
-      where: { id: { in: unique }, deletedAt: null },
-      select: { id: true },
+    const menus = await db.menu.findMany({
+      where: { deletedAt: null },
+      select: { id: true, parentId: true, type: true },
     });
-    if (found.length !== unique.length) {
-      throw new BadRequestException('One or more menu ids are invalid');
-    }
+    assertRouteAncestors(menus, unique);
     return unique;
-  }
-
-  private async clearPermCacheForRole(roleId: string): Promise<void> {
-    const links = await this.prisma.userRole.findMany({
-      where: { roleId },
-      select: { userId: true },
-    });
-    await Promise.all(links.map((l) => this.redis.del(`perm:codes:${l.userId}`)));
   }
 }

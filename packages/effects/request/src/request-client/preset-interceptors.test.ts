@@ -45,6 +45,67 @@ describe('authenticateResponseInterceptor', () => {
     return { client, reAuthenticate };
   }
 
+  it('does not refresh or replay requests belonging to a stale session', async () => {
+    const client = new RequestClient();
+    const refresh = vi.fn(async () => 'another-account-token');
+    const reAuthenticate = vi.fn(async () => {});
+    client.addResponseInterceptor(
+      authenticateResponseInterceptor({
+        client,
+        doRefreshToken: refresh,
+        doReAuthenticate: reAuthenticate,
+        enableRefreshToken: true,
+        formatToken: (token) => `Bearer ${token}`,
+        isSessionCurrent: () => false,
+      }),
+    );
+    const endpoint = vi.fn(() => [401, {}] as [number, object]);
+    mock.onPost('/write').reply(endpoint);
+    await expect(
+      client.post('/write', { operation: 'A' }),
+    ).rejects.toBeDefined();
+    expect(endpoint).toHaveBeenCalledTimes(1);
+    expect(refresh).not.toHaveBeenCalled();
+    expect(reAuthenticate).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not refresh on a rejected login', async () => {
+    const refresh = vi.fn(async () => 'token');
+    const { client, reAuthenticate } = createClient(refresh);
+    mock.onPost('/auth/login').reply(401);
+    await expect(
+      client.post('/auth/login', {}, { skipAuthRefresh: true }),
+    ).rejects.toBeDefined();
+    expect(refresh).not.toHaveBeenCalled();
+    expect(reAuthenticate).not.toHaveBeenCalled();
+  });
+
+  it('drops a write when the session changes during its refresh', async () => {
+    const client = new RequestClient();
+    let current = true;
+    const reAuthenticate = vi.fn(async () => {});
+    client.addResponseInterceptor(
+      authenticateResponseInterceptor({
+        client,
+        doRefreshToken: async () => {
+          current = false;
+          return 'new-token';
+        },
+        doReAuthenticate: reAuthenticate,
+        enableRefreshToken: true,
+        formatToken: (token) => `Bearer ${token}`,
+        isSessionCurrent: () => current,
+      }),
+    );
+    const endpoint = vi.fn(() => [401, {}] as [number, object]);
+    mock.onPost('/write').reply(endpoint);
+    await expect(client.post('/write', { operation: 'A' })).rejects.toThrow(
+      '登录状态已变化',
+    );
+    expect(endpoint).toHaveBeenCalledTimes(1);
+    expect(reAuthenticate).toHaveBeenCalledTimes(1);
+  });
+
   it('fails the queued requests when the token refresh fails', async () => {
     const refreshToken = vi.fn(
       () =>
@@ -129,5 +190,29 @@ describe('authenticateResponseInterceptor', () => {
     expect(reAuthenticate).not.toHaveBeenCalled();
     expect(initiatorHeaders).toEqual([null, 'Bearer new-token']);
     expect(queuedHeaders).toEqual([null, 'Bearer new-token']);
+  });
+
+  it('does not refresh again when a queued replay is still unauthorized', async () => {
+    let token: null | string = null;
+    const refresh = vi.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      token = 'new-token';
+      return token;
+    });
+    const { client, reAuthenticate } = createClient(refresh, () => token);
+    mock
+      .onGet('/initiator')
+      .reply((config) => (config.headers?.Authorization ? [200, {}] : [401]));
+    mock.onGet('/queued').reply(401);
+    const results = await Promise.allSettled([
+      client.get('/initiator'),
+      client.get('/queued'),
+    ]);
+    expect(results.map((result) => result.status)).toEqual([
+      'fulfilled',
+      'rejected',
+    ]);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(reAuthenticate).toHaveBeenCalledTimes(1);
   });
 });

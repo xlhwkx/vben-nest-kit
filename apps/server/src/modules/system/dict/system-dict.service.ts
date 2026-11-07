@@ -1,3 +1,16 @@
+import { authorizationMutation } from '../../../common/authorization/authorization-mutation';
+import type { AuthUser } from '../../../common/decorators/current-user.decorator';
+import {
+  listQuerySchema,
+  withListOffsetLimit,
+  listOffsetError,
+} from '../../../common/validation/list-query';
+import {
+  parseQuery,
+  optionalQueryText,
+  optionalQueryEnum,
+  requiredText,
+} from '../../../common/validation/request-validation';
 import {
   Injectable,
   BadRequestException,
@@ -6,11 +19,8 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '../../../generated/prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { RedisService } from '../../../redis/redis.service';
 import { AuditService } from '../../audit/audit.service';
 import { formatCreateTimeIso } from '../../../common/format-create-time';
-
-const DICT_VERSION_KEY = 'qingzhan:dict:version';
 
 export type DictTypeItem = {
   id: string;
@@ -65,12 +75,6 @@ export type DictDataListQuery = {
   label?: string;
   status?: string | number;
 };
-
-function parsePage(v: number | string | undefined, fallback: number): number {
-  const n = Number.parseInt(String(v ?? fallback), 10);
-  if (!Number.isFinite(n) || n < 1) return fallback;
-  return n;
-}
 
 function asDictValue(v: Prisma.JsonValue): string | number {
   if (typeof v === 'number' || typeof v === 'string') return v;
@@ -127,70 +131,84 @@ function isP2002(err: unknown): boolean {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
 }
 
+const dictTypeListSchema = listQuerySchema
+  .extend({
+    name: optionalQueryText(128),
+    code: optionalQueryText(64),
+    status: optionalQueryEnum([0, 1]),
+  })
+  .refine(withListOffsetLimit, listOffsetError);
+
+const dictDataListSchema = listQuerySchema
+  .extend({
+    label: optionalQueryText(128),
+    dictCode: requiredText(64),
+    status: optionalQueryEnum([0, 1]),
+  })
+  .refine(withListOffsetLimit, listOffsetError);
+
+type DictOption = { label: string; value: string | number; color?: string };
+
+function toOption(row: {
+  label: string;
+  value: Prisma.JsonValue;
+  color: string | null;
+}): DictOption {
+  return {
+    label: row.label,
+    value: asDictValue(row.value),
+    ...(row.color ? { color: row.color } : {}),
+  };
+}
+
 @Injectable()
 export class SystemDictService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly redis: RedisService,
     private readonly audit: AuditService,
   ) {}
 
   async getVersion(): Promise<number> {
-    // Redis down: never return a sticky `1` (would freeze frontend dict cache).
-    const reachable = await this.redis.ping();
-    if (!reachable) {
-      return Date.now();
-    }
-    const raw = await this.redis.get(DICT_VERSION_KEY);
-    const n = Number.parseInt(raw ?? '', 10);
-    if (Number.isFinite(n) && n >= 1) return n;
-    await this.redis.set(DICT_VERSION_KEY, '1', 60 * 60 * 24 * 365);
-    return 1;
-  }
-
-  private async bumpVersion(): Promise<void> {
-    const next = await this.redis.incr(DICT_VERSION_KEY);
-    if (next <= 0) {
-      await this.redis.set(DICT_VERSION_KEY, '1', 60 * 60 * 24 * 365);
-    }
-  }
-
-  async getAllEnabled(): Promise<
-    Record<string, { label: string; value: string | number; color?: string }[]>
-  > {
-    const types = await this.prisma.dictType.findMany({
-      where: { status: 1 },
-      orderBy: [{ code: 'asc' }],
+    const state = await this.prisma.dictionaryRevision.findUniqueOrThrow({
+      where: { id: 1 },
     });
-    const result: Record<string, { label: string; value: string | number; color?: string }[]> = {};
-    for (const t of types) {
-      result[t.code] = await this.getEnabledByCode(t.code);
-    }
-    return result;
+    return Number(state.version);
   }
 
-  async getEnabledByCode(
-    code: string,
-  ): Promise<{ label: string; value: string | number; color?: string }[]> {
+  async getAllEnabled(): Promise<Record<string, DictOption[]>> {
+    return this.prisma.$transaction(
+      async (tx) => {
+        const types = await tx.dictType.findMany({
+          where: { status: 1 },
+          orderBy: [{ code: 'asc' }],
+          select: { code: true },
+        });
+        const items = await tx.dictItem.findMany({
+          where: { status: 1, type: { status: 1 } },
+          orderBy: [{ dictCode: 'asc' }, { sort: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+          select: { dictCode: true, label: true, value: true, color: true },
+        });
+        const result = new Map<string, DictOption[]>(types.map((type) => [type.code, []]));
+        for (const item of items) result.get(item.dictCode)?.push(toOption(item));
+        // Own data properties also preserve codes such as "__proto__".
+        return Object.fromEntries(result);
+      },
+      { isolationLevel: 'RepeatableRead' },
+    );
+  }
+
+  async getEnabledByCode(code: string): Promise<DictOption[]> {
     if (!code?.trim()) return [];
     const rows = await this.prisma.dictItem.findMany({
-      where: { dictCode: code.trim(), status: 1 },
-      orderBy: [{ sort: 'asc' }, { createdAt: 'asc' }],
+      where: { dictCode: code.trim(), status: 1, type: { status: 1 } },
+      orderBy: [{ sort: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
     });
-    return rows.map((row) => {
-      const item: { label: string; value: string | number; color?: string } = {
-        label: row.label,
-        value: asDictValue(row.value),
-      };
-      if (row.color) item.color = row.color;
-      return item;
-    });
+    return rows.map(toOption);
   }
 
-  async listTypes(query: DictTypeListQuery): Promise<{ items: DictTypeItem[]; total: number }> {
-    const page = parsePage(query.page, 1);
-    let pageSize = parsePage(query.pageSize, 20);
-    if (pageSize > 100) pageSize = 100;
+  async listTypes(rawQuery: DictTypeListQuery): Promise<{ items: DictTypeItem[]; total: number }> {
+    const query = parseQuery(dictTypeListSchema, rawQuery);
+    const { page, pageSize } = query;
 
     const where: Prisma.DictTypeWhereInput = {};
     if (query.name?.trim()) {
@@ -199,9 +217,7 @@ export class SystemDictService {
     if (query.code?.trim()) {
       where.code = { contains: query.code.trim(), mode: 'insensitive' };
     }
-    if (query.status === 0 || query.status === '0' || query.status === 1 || query.status === '1') {
-      where.status = Number(query.status);
-    }
+    if (query.status !== undefined) where.status = query.status;
 
     const total = await this.prisma.dictType.count({ where });
     const rows = await this.prisma.dictType.findMany({
@@ -223,17 +239,27 @@ export class SystemDictService {
     return true;
   }
 
-  async createType(input: DictTypeInput): Promise<DictTypeItem> {
+  async createType(input: DictTypeInput, actor: AuthUser): Promise<DictTypeItem> {
+    return authorizationMutation(this.prisma, actor, 'System:Dict:Create', (tx) =>
+      this.createTypeAuthorized(input, actor.userId, tx),
+    );
+  }
+
+  private async createTypeAuthorized(
+    input: DictTypeInput,
+    actorId: string,
+    db: Prisma.TransactionClient,
+  ): Promise<DictTypeItem> {
     const name = input.name?.trim();
     const code = input.code?.trim();
     if (!name) throw new BadRequestException('name is required');
     if (!code) throw new BadRequestException('code is required');
 
-    const dup = await this.prisma.dictType.findUnique({ where: { code } });
+    const dup = await db.dictType.findUnique({ where: { code } });
     if (dup) throw new ConflictException('Dict code already exists');
 
     try {
-      const row = await this.prisma.dictType.create({
+      const row = await db.dictType.create({
         data: {
           name,
           code,
@@ -241,8 +267,8 @@ export class SystemDictService {
           remark: input.remark?.trim() || null,
         },
       });
-      await this.bumpVersion();
-      this.audit.record({
+      await this.audit.recordInTransaction(db, {
+        userId: actorId,
         action: 'system.dict.create',
         module: 'system.dict',
         status: 200,
@@ -255,8 +281,19 @@ export class SystemDictService {
     }
   }
 
-  async updateType(id: string, input: DictTypeInput): Promise<DictTypeItem> {
-    const existing = await this.requireType(id);
+  async updateType(id: string, input: DictTypeInput, actor: AuthUser): Promise<DictTypeItem> {
+    return authorizationMutation(this.prisma, actor, 'System:Dict:Update', (tx) =>
+      this.updateTypeAuthorized(id, input, actor.userId, tx),
+    );
+  }
+
+  private async updateTypeAuthorized(
+    id: string,
+    input: DictTypeInput,
+    actorId: string,
+    db: Prisma.TransactionClient,
+  ): Promise<DictTypeItem> {
+    const existing = await this.requireType(id, db);
 
     const data: Prisma.DictTypeUpdateInput = {};
     if (input.name !== undefined) {
@@ -268,7 +305,7 @@ export class SystemDictService {
       const code = input.code?.trim();
       if (!code) throw new BadRequestException('code is required');
       if (code !== existing.code) {
-        const dup = await this.prisma.dictType.findUnique({ where: { code } });
+        const dup = await db.dictType.findUnique({ where: { code } });
         if (dup) throw new ConflictException('Dict code already exists');
         data.code = code;
       }
@@ -281,12 +318,12 @@ export class SystemDictService {
     }
 
     try {
-      const row = await this.prisma.dictType.update({
+      const row = await db.dictType.update({
         where: { id },
         data,
       });
-      await this.bumpVersion();
-      this.audit.record({
+      await this.audit.recordInTransaction(db, {
+        userId: actorId,
         action: 'system.dict.update',
         module: 'system.dict',
         status: 200,
@@ -299,11 +336,21 @@ export class SystemDictService {
     }
   }
 
-  async deleteType(id: string): Promise<null> {
-    await this.requireType(id);
-    await this.prisma.dictType.delete({ where: { id } });
-    await this.bumpVersion();
-    this.audit.record({
+  async deleteType(id: string, actor: AuthUser): Promise<null> {
+    return authorizationMutation(this.prisma, actor, 'System:Dict:Delete', (tx) =>
+      this.deleteTypeAuthorized(id, actor.userId, tx),
+    );
+  }
+
+  private async deleteTypeAuthorized(
+    id: string,
+    actorId: string,
+    db: Prisma.TransactionClient,
+  ): Promise<null> {
+    await this.requireType(id, db);
+    await db.dictType.delete({ where: { id } });
+    await this.audit.recordInTransaction(db, {
+      userId: actorId,
       action: 'system.dict.delete',
       module: 'system.dict',
       status: 200,
@@ -312,34 +359,41 @@ export class SystemDictService {
     return null;
   }
 
-  async listData(query: DictDataListQuery): Promise<{ items: DictDataItem[]; total: number }> {
+  async listData(rawQuery: DictDataListQuery): Promise<{ items: DictDataItem[]; total: number }> {
+    const query = parseQuery(dictDataListSchema, rawQuery);
     if (!query.dictCode?.trim()) {
       throw new BadRequestException('dictCode is required');
     }
     const dictCode = query.dictCode.trim();
-    const page = parsePage(query.page, 1);
-    let pageSize = parsePage(query.pageSize, 20);
-    if (pageSize > 100) pageSize = 100;
+    const { page, pageSize } = query;
 
     const where: Prisma.DictItemWhereInput = { dictCode };
     if (query.label?.trim()) {
       where.label = { contains: query.label.trim(), mode: 'insensitive' };
     }
-    if (query.status === 0 || query.status === '0' || query.status === 1 || query.status === '1') {
-      where.status = Number(query.status);
-    }
+    if (query.status !== undefined) where.status = query.status;
 
     const total = await this.prisma.dictItem.count({ where });
     const rows = await this.prisma.dictItem.findMany({
       where,
-      orderBy: [{ sort: 'asc' }, { createdAt: 'asc' }],
+      orderBy: [{ sort: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
       skip: (page - 1) * pageSize,
       take: pageSize,
     });
     return { items: rows.map((row) => toDataItem(row)), total };
   }
 
-  async createData(input: DictDataInput): Promise<DictDataItem> {
+  async createData(input: DictDataInput, actor: AuthUser): Promise<DictDataItem> {
+    return authorizationMutation(this.prisma, actor, 'System:Dict:Create', (tx) =>
+      this.createDataAuthorized(input, actor.userId, tx),
+    );
+  }
+
+  private async createDataAuthorized(
+    input: DictDataInput,
+    actorId: string,
+    db: Prisma.TransactionClient,
+  ): Promise<DictDataItem> {
     const dictCode = input.dictCode?.trim();
     const label = input.label?.trim();
     if (!dictCode) throw new BadRequestException('dictCode is required');
@@ -347,9 +401,9 @@ export class SystemDictService {
     if (input.value === undefined || input.value === null) {
       throw new BadRequestException('value is required');
     }
-    await this.requireTypeByCode(dictCode);
+    await this.requireTypeByCode(dictCode, db);
 
-    const row = await this.prisma.dictItem.create({
+    const row = await db.dictItem.create({
       data: {
         dictCode,
         label,
@@ -360,8 +414,8 @@ export class SystemDictService {
         remark: input.remark?.trim() || null,
       },
     });
-    await this.bumpVersion();
-    this.audit.record({
+    await this.audit.recordInTransaction(db, {
+      userId: actorId,
       action: 'system.dict.create',
       module: 'system.dict',
       status: 200,
@@ -370,8 +424,24 @@ export class SystemDictService {
     return toDataItem(row);
   }
 
-  async updateData(id: string, input: DictDataInput): Promise<DictDataItem> {
-    const existing = await this.requireData(id);
+  async updateData(id: string, input: DictDataInput, actor: AuthUser): Promise<DictDataItem> {
+    return authorizationMutation(this.prisma, actor, 'System:Dict:Update', (tx) =>
+      this.updateDataAuthorized(id, input, actor.userId, tx),
+    );
+  }
+
+  private async updateDataAuthorized(
+    id: string,
+    input: DictDataInput,
+    actorId: string,
+    db: Prisma.TransactionClient,
+  ): Promise<DictDataItem> {
+    const existing = await this.requireData(id, db);
+    if (input.dictCode !== undefined && input.dictCode.trim() !== existing.dictCode) {
+      throw new BadRequestException(
+        'dictCode cannot be changed; create an item in the target dictionary',
+      );
+    }
     const data: Prisma.DictItemUpdateInput = {};
 
     if (input.label !== undefined) {
@@ -395,12 +465,12 @@ export class SystemDictService {
       data.remark = input.remark?.trim() || null;
     }
 
-    const row = await this.prisma.dictItem.update({
+    const row = await db.dictItem.update({
       where: { id },
       data,
     });
-    await this.bumpVersion();
-    this.audit.record({
+    await this.audit.recordInTransaction(db, {
+      userId: actorId,
       action: 'system.dict.update',
       module: 'system.dict',
       status: 200,
@@ -409,11 +479,21 @@ export class SystemDictService {
     return toDataItem(row);
   }
 
-  async deleteData(id: string): Promise<null> {
-    await this.requireData(id);
-    await this.prisma.dictItem.delete({ where: { id } });
-    await this.bumpVersion();
-    this.audit.record({
+  async deleteData(id: string, actor: AuthUser): Promise<null> {
+    return authorizationMutation(this.prisma, actor, 'System:Dict:Delete', (tx) =>
+      this.deleteDataAuthorized(id, actor.userId, tx),
+    );
+  }
+
+  private async deleteDataAuthorized(
+    id: string,
+    actorId: string,
+    db: Prisma.TransactionClient,
+  ): Promise<null> {
+    await this.requireData(id, db);
+    await db.dictItem.delete({ where: { id } });
+    await this.audit.recordInTransaction(db, {
+      userId: actorId,
       action: 'system.dict.delete',
       module: 'system.dict',
       status: 200,
@@ -422,20 +502,20 @@ export class SystemDictService {
     return null;
   }
 
-  private async requireType(id: string) {
-    const row = await this.prisma.dictType.findUnique({ where: { id } });
+  private async requireType(id: string, db: Prisma.TransactionClient) {
+    const row = await db.dictType.findUnique({ where: { id } });
     if (!row) throw new NotFoundException('Dict type not found');
     return row;
   }
 
-  private async requireTypeByCode(code: string) {
-    const row = await this.prisma.dictType.findUnique({ where: { code } });
+  private async requireTypeByCode(code: string, db: Prisma.TransactionClient) {
+    const row = await db.dictType.findUnique({ where: { code } });
     if (!row) throw new NotFoundException('Dict type not found');
     return row;
   }
 
-  private async requireData(id: string) {
-    const row = await this.prisma.dictItem.findUnique({ where: { id } });
+  private async requireData(id: string, db: Prisma.TransactionClient) {
+    const row = await db.dictItem.findUnique({ where: { id } });
     if (!row) throw new NotFoundException('Dict data not found');
     return row;
   }

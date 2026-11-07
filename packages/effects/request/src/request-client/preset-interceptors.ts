@@ -1,10 +1,16 @@
 import type { RequestClient } from './request-client';
-import type { MakeErrorMessageFn, ResponseInterceptorConfig } from './types';
+import type {
+  MakeErrorMessageFn,
+  RequestClientConfig,
+  ResponseInterceptorConfig,
+} from './types';
 
 import { $t } from '@vben/locales';
 import { isFunction } from '@vben/utils';
 
 import axios from 'axios';
+
+import { AuthSessionChangedError } from './auth-session';
 
 export const defaultResponseInterceptor = ({
   codeField = 'code',
@@ -50,12 +56,17 @@ export const authenticateResponseInterceptor = ({
   doRefreshToken,
   enableRefreshToken,
   formatToken,
+  isSessionCurrent,
 }: {
   client: RequestClient;
-  doReAuthenticate: () => Promise<void>;
-  doRefreshToken: () => Promise<string>;
+  doReAuthenticate: (
+    error?: unknown,
+    config?: RequestClientConfig,
+  ) => Promise<void>;
+  doRefreshToken: (config: RequestClientConfig) => Promise<string>;
   enableRefreshToken: boolean;
   formatToken: (token: string) => null | string;
+  isSessionCurrent?: (config: RequestClientConfig) => boolean;
 }): ResponseInterceptorConfig => {
   return {
     rejected: async (error) => {
@@ -64,10 +75,16 @@ export const authenticateResponseInterceptor = ({
       if (response?.status !== 401) {
         throw error;
       }
+      if (config.skipAuthRefresh) throw error;
+      if (isSessionCurrent && !isSessionCurrent(config)) {
+        const changed = new AuthSessionChangedError();
+        await doReAuthenticate(changed, config);
+        throw changed;
+      }
       // 判断是否启用了 refreshToken 功能
       // 如果没有启用或者已经是重试请求了，直接跳转到重新登录
       if (!enableRefreshToken || config.__isRetryRequest) {
-        await doReAuthenticate();
+        await doReAuthenticate(error, config);
         throw error;
       }
       // 如果正在刷新 token，则将请求加入队列，等待刷新完成
@@ -80,6 +97,11 @@ export const authenticateResponseInterceptor = ({
               reject(refreshError ?? new Error('Token refresh failed'));
               return;
             }
+            if (isSessionCurrent && !isSessionCurrent(config)) {
+              reject(new AuthSessionChangedError());
+              return;
+            }
+            config.__isRetryRequest = true;
             config.headers.Authorization = formatToken(newToken);
             resolve(client.request(config.url, { ...config }));
           });
@@ -92,7 +114,10 @@ export const authenticateResponseInterceptor = ({
       config.__isRetryRequest = true;
 
       try {
-        const newToken = await doRefreshToken();
+        const newToken = await doRefreshToken(config);
+        if (isSessionCurrent && !isSessionCurrent(config)) {
+          throw new AuthSessionChangedError();
+        }
 
         // 处理队列中的请求
         client.refreshTokenQueue.forEach((callback) => callback(newToken));
@@ -107,7 +132,7 @@ export const authenticateResponseInterceptor = ({
         );
         client.refreshTokenQueue = [];
         console.error('Refresh token failed, please login again.');
-        await doReAuthenticate();
+        await doReAuthenticate(refreshError, config);
 
         throw refreshError;
       } finally {

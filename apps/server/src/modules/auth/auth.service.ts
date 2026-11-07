@@ -17,9 +17,10 @@ import type { LoginDto } from './dto/login.dto';
 import { AuditService } from '../audit/audit.service';
 import { getRequestContext } from '../../common/request-context';
 import { MetricsService } from '../../observability/metrics.service';
+import type { Prisma } from '../../generated/prisma/client';
+import { readPermissionCodes } from '../../common/authorization/permission-codes';
 
 const REFRESH_COOKIE = 'jwt';
-const CODES_CACHE_TTL = 60;
 
 function parseTtlToSeconds(ttl: string, fallback: number): number {
   const m = /^(\d+)([smhd])$/i.exec(ttl.trim());
@@ -108,10 +109,7 @@ export class AuthService {
   }
 
   private async readFailCount(key: string): Promise<number> {
-    const raw = await this.redis.getStrict(key);
-    if (!raw) return 0;
-    const n = Number(raw);
-    return Number.isFinite(n) ? n : 0;
+    return this.redis.readCounterWithTtlStrict(key, this.failWindowSec());
   }
 
   private throwLockUnavailable(cause: unknown): never {
@@ -214,21 +212,27 @@ export class AuthService {
     );
   }
 
-  private async issueRefresh(userId: string): Promise<{ token: string; jti: string }> {
+  private async issueRefresh(
+    tx: Prisma.TransactionClient,
+    user: { id: string; tokenVersion: number },
+    familyId: string = randomUUID(),
+  ): Promise<{ token: string; jti: string }> {
     const jti = randomUUID().replaceAll('-', '');
     const refreshTtl = this.config.get<string>('JWT_REFRESH_TTL') ?? '7d';
     const expiresInSec = parseTtlToSeconds(refreshTtl, 7 * 86_400);
     const token = await this.jwt.signAsync(
-      { sub: userId, jti },
+      { sub: user.id, jti, tv: user.tokenVersion },
       {
         secret: this.config.getOrThrow<string>('JWT_REFRESH_SECRET'),
         expiresIn: expiresInSec,
       },
     );
     const expiresAt = new Date(Date.now() + expiresInSec * 1000);
-    await this.prisma.refreshToken.create({
+    await tx.refreshToken.create({
       data: {
-        userId,
+        userId: user.id,
+        familyId,
+        tokenVersion: user.tokenVersion,
         jti,
         tokenHash: sha256(token),
         expiresAt,
@@ -262,27 +266,41 @@ export class AuthService {
         status: 403,
         detail: { reason: 'invalid_credentials' },
       });
-      this.clearRefreshCookie(res);
       throw new ForbiddenException('Username or password is incorrect.');
     }
 
     await this.clearLoginFailures(username);
 
-    const accessToken = await this.signAccess(user);
-    const { token: refreshToken } = await this.issueRefresh(user.id);
+    // Serialize issuance with password/status changes, which update this same user row.
+    const { accessToken, refreshToken } = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${user.id}::uuid FOR UPDATE`;
+      const current = await tx.user.findFirst({
+        where: { id: user.id, deletedAt: null, status: 1 },
+      });
+      if (
+        !current ||
+        current.tokenVersion !== user.tokenVersion ||
+        current.passwordHash !== user.passwordHash
+      ) {
+        throw new ForbiddenException('Credentials changed. Please log in again.');
+      }
+      const accessToken = await this.signAccess(current);
+      const { token } = await this.issueRefresh(tx, current);
+      await this.audit.recordInTransaction(tx, {
+        action: 'auth.login',
+        module: 'auth',
+        userId: user.id,
+        username: user.username,
+        status: 200,
+        detail: { userId: user.id },
+      });
+      return { accessToken, refreshToken: token };
+    });
     this.setRefreshCookie(res, refreshToken);
 
     this.metrics.incLoginSuccess();
-    this.audit.record({
-      action: 'auth.login',
-      module: 'auth',
-      userId: user.id,
-      username: user.username,
-      status: 200,
-      detail: { userId: user.id },
-    });
 
-    const roles = user.roles.map((r) => r.role.code);
+    const roles = user.roles.filter((r) => r.role.status === 1).map((r) => r.role.code);
     return {
       id: user.id,
       userId: user.id,
@@ -294,9 +312,12 @@ export class AuthService {
     };
   }
 
-  async refresh(refreshCookie: string | undefined, res: Response): Promise<string> {
+  async refresh(
+    refreshCookie: string | undefined,
+    res: Response,
+    expectedUserId?: string,
+  ): Promise<string> {
     if (!refreshCookie) {
-      this.clearRefreshCookie(res);
       throw new ForbiddenException('Forbidden');
     }
 
@@ -305,109 +326,134 @@ export class AuthService {
       payload = await this.jwt.verifyAsync(refreshCookie, {
         secret: this.config.getOrThrow<string>('JWT_REFRESH_SECRET'),
       });
+      if (
+        !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(payload.sub) ||
+        typeof payload.jti !== 'string'
+      ) {
+        throw new Error('Invalid refresh claims');
+      }
     } catch {
-      this.clearRefreshCookie(res);
       throw new ForbiddenException('Forbidden');
     }
 
-    const stored = await this.prisma.refreshToken.findUnique({
-      where: { jti: payload.jti },
-    });
-    if (
-      !stored ||
-      stored.revokedAt ||
-      stored.expiresAt.getTime() < Date.now() ||
-      stored.tokenHash !== sha256(refreshCookie) ||
-      stored.userId !== payload.sub
-    ) {
-      this.clearRefreshCookie(res);
-      throw new ForbiddenException('Forbidden');
+    if (expectedUserId && payload.sub !== expectedUserId) {
+      throw new ForbiddenException('Session identity changed. Please log in again.');
     }
 
-    const user = await this.prisma.user.findFirst({
-      where: { id: payload.sub, deletedAt: null, status: 1 },
+    // A delayed failure must never clear a newer cookie set by another request/tab.
+    // Only explicit logout clears the shared cookie; token validation remains strict.
+    const result = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${payload.sub}::uuid FOR UPDATE`;
+      const user = await tx.user.findFirst({
+        where: { id: payload.sub, deletedAt: null, status: 1 },
+      });
+      if (!user) throw new ForbiddenException('Forbidden');
+      const stored = await tx.refreshToken.findUnique({
+        where: { jti: payload.jti },
+        select: { familyId: true },
+      });
+      if (!stored) throw new ForbiddenException('Forbidden');
+      const now = new Date();
+      const consumed = await tx.refreshToken.updateMany({
+        where: {
+          jti: payload.jti,
+          userId: user.id,
+          tokenHash: sha256(refreshCookie),
+          tokenVersion: user.tokenVersion,
+          revokedAt: null,
+          expiresAt: { gt: now },
+        },
+        data: { revokedAt: now },
+      });
+      if (consumed.count !== 1) throw new ForbiddenException('Forbidden');
+      const accessToken = await this.signAccess(user);
+      const { token } = await this.issueRefresh(tx, user, stored.familyId);
+      await this.audit.recordInTransaction(tx, {
+        action: 'auth.refresh',
+        module: 'auth',
+        userId: user.id,
+        username: user.username,
+        status: 200,
+      });
+      return { accessToken, token };
     });
-    if (!user) {
-      this.clearRefreshCookie(res);
-      throw new ForbiddenException('Forbidden');
-    }
-
-    await this.prisma.refreshToken.update({
-      where: { id: stored.id },
-      data: { revokedAt: new Date() },
-    });
-
-    const accessToken = await this.signAccess(user);
-    const { token: newRefresh } = await this.issueRefresh(user.id);
-    this.setRefreshCookie(res, newRefresh);
-    return accessToken;
+    this.setRefreshCookie(res, result.token);
+    return result.accessToken;
   }
 
-  async logout(refreshCookie: string | undefined, res: Response): Promise<string> {
+  async logout(
+    refreshCookie: string | undefined,
+    res: Response,
+    expectedUserId?: string,
+  ): Promise<string> {
     let logoutUserId: string | undefined;
     let logoutUsername: string | undefined;
     if (refreshCookie) {
+      let payload: { jti: string; sub: string } | undefined;
       try {
-        const payload = await this.jwt.verifyAsync<{
+        const verified = await this.jwt.verifyAsync<{
           jti: string;
-          sub?: string;
+          sub: string;
         }>(refreshCookie, {
           secret: this.config.getOrThrow<string>('JWT_REFRESH_SECRET'),
         });
-        const stored = await this.prisma.refreshToken.findUnique({
-          where: { jti: payload.jti },
-          select: { userId: true },
-        });
-        const userId = stored?.userId ?? payload.sub;
-        if (userId) {
-          logoutUserId = userId;
-          const u = await this.prisma.user.findUnique({
-            where: { id: userId },
+        if (
+          /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(verified.sub) &&
+          typeof verified.jti === 'string'
+        )
+          payload = verified;
+      } catch {
+        // An invalid/expired cookie is already unusable. Storage errors below must propagate.
+      }
+      if (payload) {
+        if (expectedUserId && payload.sub !== expectedUserId) {
+          throw new ForbiddenException('Session identity changed. Please log in again.');
+        }
+        const claims = payload;
+        await this.prisma.$transaction(async (tx) => {
+          await tx.$queryRaw`SELECT id FROM users WHERE id = ${claims.sub}::uuid FOR UPDATE`;
+          const stored = await tx.refreshToken.findUnique({
+            where: { jti: claims.jti },
+          });
+          if (!stored || stored.userId !== claims.sub || stored.tokenHash !== sha256(refreshCookie))
+            return;
+          await tx.refreshToken.updateMany({
+            where: {
+              familyId: stored.familyId,
+              userId: claims.sub,
+              revokedAt: null,
+            },
+            data: { revokedAt: new Date() },
+          });
+          logoutUserId = stored.userId;
+          const user = await tx.user.findUnique({
+            where: { id: stored.userId },
             select: { username: true },
           });
-          logoutUsername = u?.username;
-        }
-        await this.prisma.refreshToken.updateMany({
-          where: { jti: payload.jti, revokedAt: null },
-          data: { revokedAt: new Date() },
+          logoutUsername = user?.username;
+          await this.audit.recordInTransaction(tx, {
+            action: 'auth.logout',
+            module: 'auth',
+            userId: logoutUserId,
+            username: logoutUsername,
+            status: 200,
+          });
         });
-      } catch {
-        // ignore invalid cookie on logout
       }
     }
-    this.audit.record({
-      action: 'auth.logout',
-      module: 'auth',
-      userId: logoutUserId ?? null,
-      username: logoutUsername ?? null,
-      status: 200,
-    });
+    if (!logoutUserId)
+      this.audit.record({
+        action: 'auth.logout',
+        module: 'auth',
+        userId: logoutUserId ?? null,
+        username: logoutUsername ?? null,
+        status: 200,
+      });
     this.clearRefreshCookie(res);
     return '';
   }
 
   async getCodes(userId: string): Promise<string[]> {
-    const cacheKey = `perm:codes:${userId}`;
-    const cached = await this.redis.get(cacheKey);
-    if (cached) {
-      try {
-        return JSON.parse(cached) as string[];
-      } catch {
-        // fall through
-      }
-    }
-
-    const rows = await this.prisma.rolePermission.findMany({
-      where: {
-        role: {
-          users: { some: { userId } },
-          status: 1,
-        },
-      },
-      include: { permission: true },
-    });
-    const codes = [...new Set(rows.map((r) => r.permission.code))].toSorted();
-    await this.redis.set(cacheKey, JSON.stringify(codes), CODES_CACHE_TTL);
-    return codes;
+    return readPermissionCodes(this.prisma, userId);
   }
 }

@@ -1,32 +1,13 @@
-# Qingzhan Nest server e2e — server-only job (full monorepo / frontend CI deferred).
+# Backend checks; frontend delivery checks live in qingzhan-delivery.yml.
 # Does not gate on github.repository == vbenjs/... so forks/private remotes still run.
 name: Qingzhan server e2e
 
 on:
   push:
     branches: [main]
-    paths:
-      - 'apps/server/**'
-      - '规则/**'
-      - 'docker-compose.yml'
-      - '.env.example'
-      - 'pnpm-workspace.yaml'
-      - 'pnpm-lock.yaml'
-      - 'package.json'
-      - 'scripts/postinstall-stub.mjs'
-      - '.github/workflows/qingzhan-server-e2e.yml'
   pull_request:
     branches: [main]
-    paths:
-      - 'apps/server/**'
-      - '规则/**'
-      - 'docker-compose.yml'
-      - '.env.example'
-      - 'pnpm-workspace.yaml'
-      - 'pnpm-lock.yaml'
-      - 'package.json'
-      - 'scripts/postinstall-stub.mjs'
-      - '.github/workflows/qingzhan-server-e2e.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -44,31 +25,34 @@ jobs:
     env:
       CI: true
       TZ: Asia/Shanghai
-      APP_PORT: "5320"
+      APP_PORT: '5320'
       NODE_ENV: test
+      ALLOW_DEMO_SEED: 'true'
       # Host ports match Compose defaults on clean GHA runners
       POSTGRES_USER: qingzhan
       POSTGRES_PASSWORD: qingzhan
       POSTGRES_DB: qingzhan
-      POSTGRES_PORT: "5432"
-      REDIS_PORT: "6379"
+      POSTGRES_PORT: '5432'
+      REDIS_PORT: '6379'
       REDIS_PASSWORD: qingzhan
       DATABASE_URL: postgresql://qingzhan:qingzhan@localhost:5432/qingzhan?schema=public
       REDIS_URL: redis://:qingzhan@localhost:6379/0
-      COOKIE_SECURE: "false"
+      COOKIE_SECURE: 'false'
       COOKIE_SAME_SITE: lax
       CORS_ORIGINS: http://localhost:5666
       APP_PUBLIC_URL: http://localhost:5320
       THROTTLE_STORAGE: redis
-      THROTTLE_LIMIT: "10000"
-      THROTTLE_LOGIN_LIMIT: "1000"
-      AUTH_FAIL_MAX: "5"
-      AUTH_FAIL_USER_MAX: "5"
-      AUTH_FAIL_IP_MAX: "10000"
+      THROTTLE_LIMIT: '10000'
+      THROTTLE_LOGIN_LIMIT: '1000'
+      AUTH_FAIL_MAX: '5'
+      AUTH_FAIL_USER_MAX: '5'
+      AUTH_FAIL_IP_MAX: '10000'
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Install pnpm
         uses: pnpm/action-setup@v6
@@ -79,13 +63,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           # Nest 12 ships ESM; Jest 30 needs Node >=24.9 for require(esm)
-          node-version: "24"
+          node-version: '24'
 
       - name: Random JWT secrets (never commit)
         shell: bash
         run: |
-          echo "JWT_ACCESS_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
-          echo "JWT_REFRESH_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          for key in JWT_ACCESS_SECRET JWT_REFRESH_SECRET; do
+            value=$(openssl rand -hex 32)
+            echo "::add-mask::$value"
+            echo "$key=$value" >> "$GITHUB_ENV"
+          done
 
       - name: Write root + apps/server .env
         shell: bash
@@ -127,7 +114,7 @@ jobs:
         # --config.dangerouslyAllowAllBuilds=true. Filter keeps install scoped.
         # Filtered install leaves internal/* without deps — skip root `pnpm -r stub`.
         env:
-          IGNORE_STUB: "1"
+          IGNORE_STUB: '1'
         run: pnpm install --frozen-lockfile --filter @qingzhan/server...
 
       - name: Prisma migrate + seed
@@ -141,6 +128,66 @@ jobs:
         working-directory: apps/server
         run: pnpm run build
 
+      - name: Check runtime, tests and seed types
+        working-directory: apps/server
+        run: |
+          pnpm exec tsc --noEmit --incremental false -p test/tsconfig.json
+          pnpm exec tsc -p prisma/tsconfig.json
+
+      - name: Unit and regression tests
+        working-directory: apps/server
+        run: pnpm test --runInBand
+
       - name: E2E
         working-directory: apps/server
-        run: pnpm test:e2e
+        run: pnpm test:e2e --runInBand
+
+      - name: Build production image
+        run: docker build -f apps/server/Dockerfile -t qingzhan-server:ci .
+
+      - name: Bootstrap an empty production database without demo accounts
+        shell: bash
+        run: |
+          docker compose exec -T postgres createdb -U "$POSTGRES_USER" qingzhan_bootstrap
+          export BOOTSTRAP_ADMIN_USERNAME=production_smoke
+          export BOOTSTRAP_ADMIN_PASSWORD=$(openssl rand -hex 24)
+          echo "::add-mask::$BOOTSTRAP_ADMIN_PASSWORD"
+          bootstrap_url="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${POSTGRES_PORT}/qingzhan_bootstrap?schema=public"
+          docker run --rm --network host -e DATABASE_URL="$bootstrap_url" \
+            -e BOOTSTRAP_ADMIN_USERNAME -e BOOTSTRAP_ADMIN_PASSWORD \
+            qingzhan-server:ci node dist/cli/bootstrap-admin.js
+          if docker run --rm --network host -e DATABASE_URL="$bootstrap_url" \
+            -e BOOTSTRAP_ADMIN_USERNAME -e BOOTSTRAP_ADMIN_PASSWORD \
+            qingzhan-server:ci node dist/cli/bootstrap-admin.js > bootstrap-retry.log 2>&1; then
+            echo 'Repeated bootstrap unexpectedly succeeded'
+            exit 1
+          fi
+          grep -q 'Bootstrap requires an empty users table' bootstrap-retry.log
+          user_count=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d qingzhan_bootstrap -tAc 'SELECT count(*) FROM users')
+          test "$user_count" = 1
+          navigation_grants=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d qingzhan_bootstrap -tAc "SELECT count(*) FROM role_menus rm JOIN menus m ON m.id=rm.menu_id WHERE m.type IN ('catalog','menu') AND m.deleted_at IS NULL")
+          test "$navigation_grants" = 7
+          home_count=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d qingzhan_bootstrap -tAc "SELECT count(*) FROM users WHERE home_path='/system/user'")
+          test "$home_count" = 1
+
+      - name: Production image migration, readiness and shutdown smoke
+        shell: bash
+        run: |
+          trap 'docker logs qingzhan-smoke; docker rm -f qingzhan-smoke' EXIT
+          docker run -d --name qingzhan-smoke --network host \
+            -e NODE_ENV=production -e APP_PORT=5320 \
+            -e DATABASE_URL -e REDIS_URL -e JWT_ACCESS_SECRET -e JWT_REFRESH_SECRET \
+            -e METRICS_ENABLED=false -e COOKIE_SECURE=true \
+            -e RUN_MIGRATE_ON_START=true qingzhan-server:ci
+          ready=false
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:5320/api/health/ready; then
+              ready=true
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = true
+          docker stop --time 30 qingzhan-smoke
+          exit_code=$(docker inspect --format '{{.State.ExitCode}}' qingzhan-smoke)
+          test "$exit_code" = 0 || test "$exit_code" = 143

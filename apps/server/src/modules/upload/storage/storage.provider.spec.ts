@@ -1,3 +1,4 @@
+import { loadEnv } from '../../../common/config/env';
 import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { LocalStorageProvider } from './local.storage';
@@ -6,8 +7,8 @@ import { promises as fs } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-describe('StorageProvider (local default)', () => {
-  it('LocalStorageProvider puts file and returns public url', async () => {
+describe('storageProvider (local default)', () => {
+  it('localStorageProvider puts file and returns public url', async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'qz-upload-'));
     const config = {
       get: (key: string) => {
@@ -58,7 +59,7 @@ describe('StorageProvider (local default)', () => {
       '../evil.bin',
       '2026/../../evil.bin',
       '/etc/passwd',
-      '..\\evil.bin',
+      String.raw`..\evil.bin`,
       'a/./b.bin',
       '',
     ]) {
@@ -83,8 +84,7 @@ describe('StorageProvider (local default)', () => {
     expect(abs.startsWith(root)).toBe(true);
   });
 
-  it('STORAGE_DRIVER default is local (env schema)', async () => {
-    const { loadEnv } = await import('../../../common/config/env');
+  it('sTORAGE_DRIVER default is local (env schema)', () => {
     const env = loadEnv({
       DATABASE_URL: 'postgresql://u:p@localhost:5432/db',
       REDIS_URL: 'redis://localhost:6379/0',

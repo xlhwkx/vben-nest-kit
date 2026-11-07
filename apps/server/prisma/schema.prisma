@@ -8,6 +8,8 @@ datasource db {
 }
 
 model User {
+  /// Optimistic management edit revision; independent of authentication tokenVersion.
+  version      Int            @default(1)
   id           String         @id @default(uuid(7)) @db.Uuid
   username     String         @unique @db.VarChar(64)
   passwordHash String         @map("password_hash") @db.VarChar(255)
@@ -33,6 +35,8 @@ model User {
 }
 
 model Role {
+  /// Optimistic management edit revision; independent of authentication tokenVersion.
+  version      Int            @default(1)
   id          String           @id @default(uuid(7)) @db.Uuid
   code        String           @unique @db.VarChar(64)
   name        String           @db.VarChar(128)
@@ -81,17 +85,23 @@ model RefreshToken {
   id        String    @id @default(uuid(7)) @db.Uuid
   userId    String    @map("user_id") @db.Uuid
   jti       String    @unique @db.VarChar(64)
+  familyId  String    @default(uuid()) @map("family_id") @db.Uuid
   tokenHash String    @map("token_hash") @db.VarChar(128)
+  tokenVersion Int    @default(0) @map("token_version")
   expiresAt DateTime  @map("expires_at") @db.Timestamptz(3)
   revokedAt DateTime? @map("revoked_at") @db.Timestamptz(3)
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([expiresAt])
+  @@index([familyId])
   @@map("refresh_tokens")
 }
 
 model Menu {
+  /// Optimistic management edit revision; independent of authentication tokenVersion.
+  version      Int            @default(1)
   id        String    @id @default(uuid(7)) @db.Uuid
   parentId  String?   @map("parent_id") @db.Uuid
   name      String    @unique @db.VarChar(128)
@@ -178,6 +188,14 @@ model DictItem {
   @@index([dictCode])
   @@index([status])
   @@map("dict_items")
+}
+
+/// One durable invalidation revision, updated by dictionary table triggers.
+model DictionaryRevision {
+  id      Int    @id @default(1)
+  version BigInt @default(1)
+
+  @@map("dictionary_revision")
 }
 
 model AuditLog {

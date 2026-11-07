@@ -35,7 +35,10 @@ RUN apt-get update \
 
 COPY . .
 
-ENV IGNORE_STUB=1
+# Prisma loads its datasource config during generation; generation never connects.
+# This placeholder is confined to the builder and is not inherited by the runner.
+ENV IGNORE_STUB=1 \
+    DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build
 RUN --mount=type=cache,id=pnpm-qingzhan,target=/pnpm/store \
     pnpm config set registry https://registry.npmmirror.com \
     && pnpm install --frozen-lockfile --filter @qingzhan/server... \
@@ -45,7 +48,7 @@ RUN --mount=type=cache,id=pnpm-qingzhan,target=/pnpm/store \
 RUN pnpm --filter @qingzhan/server exec prisma generate \
   && pnpm --filter @qingzhan/server run build
 
-RUN pnpm --filter @qingzhan/server deploy --prod /out \
+RUN pnpm --filter @qingzhan/server deploy --legacy --prod /out \
   && cp -a apps/server/prisma /out/prisma \
   && cp apps/server/prisma.config.ts /out/prisma.config.ts \
   && cp apps/server/docker-entrypoint.sh /out/docker-entrypoint.sh \

@@ -7,6 +7,7 @@ import {
   Post,
   Req,
   Res,
+  UseGuards,
   VERSION_NEUTRAL,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
@@ -18,12 +19,14 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
 import { AuthService } from './auth.service';
 import { CaptchaService } from './captcha/captcha.service';
+import { AuthOriginGuard } from './auth-origin.guard';
+import { LoginThrottle } from '../../common/throttler/login-throttle';
 
 const loginSchema = z.object({
-  username: z.string().min(1),
-  password: z.string().min(1),
-  captchaId: z.string().optional(),
-  captchaToken: z.string().optional(),
+  username: z.string().trim().min(1).max(64),
+  password: z.string().min(1).max(128),
+  captchaId: z.string().max(128).optional(),
+  captchaToken: z.string().max(128).optional(),
 });
 
 @ApiTags('Auth')
@@ -46,6 +49,8 @@ export class AuthController {
 
   @Public()
   @Post('login')
+  @LoginThrottle()
+  @UseGuards(AuthOriginGuard)
   @HttpCode(200)
   async login(
     @Body() body: unknown,
@@ -71,18 +76,24 @@ export class AuthController {
   @Public()
   @SkipEnvelope()
   @Post('refresh')
+  @UseGuards(AuthOriginGuard)
   @HttpCode(200)
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<string> {
+    const parsed = z.object({ expectedUserId: z.uuid().optional() }).safeParse(req.body ?? {});
+    if (!parsed.success) throw new BadRequestException('Invalid refresh identity');
     const cookie = req.cookies?.jwt as string | undefined;
-    return this.auth.refresh(cookie, res);
+    return this.auth.refresh(cookie, res, parsed.data.expectedUserId);
   }
 
   @Public()
   @Post('logout')
+  @UseGuards(AuthOriginGuard)
   @HttpCode(200)
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<string> {
+    const parsed = z.object({ expectedUserId: z.uuid().optional() }).safeParse(req.body ?? {});
+    if (!parsed.success) throw new BadRequestException('Invalid logout identity');
     const cookie = req.cookies?.jwt as string | undefined;
-    return this.auth.logout(cookie, res);
+    return this.auth.logout(cookie, res, parsed.data.expectedUserId);
   }
 
   @ApiBearerAuth('Bearer')

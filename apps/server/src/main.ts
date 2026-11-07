@@ -9,12 +9,19 @@ import * as path from 'node:path';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { requestIdMiddleware } from './common/middleware/request-id.middleware';
+import { DrainingExpressAdapter } from './common/http/draining-express.adapter';
+import { AuditService } from './modules/audit/audit.service';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const adapter = new DrainingExpressAdapter();
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, adapter, {
+    return503OnClosing: true,
+  });
   const config = app.get(ConfigService);
+  adapter.drainTimeoutMs = config.get<number>('SHUTDOWN_TIMEOUT_MS') ?? 25_000;
+  adapter.afterHttpDrain = (remainingMs) => app.get(AuditService).flush(remainingMs);
 
-  app.set('trust proxy', 1);
+  app.set('trust proxy', config.get<string>('TRUST_PROXY') || false);
   app.use(cookieParser());
   app.use(requestIdMiddleware);
 

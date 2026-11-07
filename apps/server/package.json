@@ -22,7 +22,10 @@
     "prisma:seed": "prisma db seed",
     "db:setup": "prisma migrate dev && prisma db seed",
     "postinstall": "prisma generate",
-    "test:load:smoke": "node ../../scripts/qingzhan/load-smoke.mjs"
+    "test:load:smoke": "node ../../scripts/qingzhan/load-smoke.mjs",
+    "bootstrap:admin": "node dist/cli/bootstrap-admin.js",
+    "provision:admin-routes": "node dist/cli/provision-admin-routes.js",
+    "maintenance:data": "node dist/cli/maintain-data.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1161.0",
@@ -38,15 +41,16 @@
     "argon2": "^0.45.1",
     "bullmq": "^6.5.3",
     "cookie-parser": "^1.4.7",
-    "file-type": "16.5.4",
+    "dotenv": "^18.0.9",
+    "file-type": "21.3.2",
     "ioredis": "^6.0.0",
     "multer": "^2.5.0",
     "pg": "^8.23.1",
+    "prisma": "^7.10.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "uuid": "^14.0.3",
-    "zod": "^4.6.7",
-    "prisma": "^7.10.1"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
@@ -62,7 +66,6 @@
     "@types/pg": "^8.23.1",
     "@types/supertest": "^6.0.3",
     "@types/uuid": "^11.0.0",
-    "dotenv": "^18.0.9",
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",

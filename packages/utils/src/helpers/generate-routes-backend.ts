@@ -8,6 +8,8 @@ import type {
 
 import { mapTree } from '@vben-core/shared/utils';
 
+import { safeHttpUrl } from './safe-http-url';
+
 /**
  * 判断路由是否在菜单中显示但访问时展示 403（让用户知悉功能并申请权限）
  */
@@ -66,6 +68,12 @@ function convertRoutes(
 ): RouteRecordRaw[] {
   return mapTree(routes, (node) => {
     const route = node as unknown as RouteRecordRaw;
+    if (route.meta) {
+      route.meta = { ...route.meta };
+      for (const key of ['iframeSrc', 'link'] as const) {
+        if (key in route.meta) route.meta[key] = safeHttpUrl(route.meta[key]);
+      }
+    }
     const { component, name } = node;
 
     if (!name) {

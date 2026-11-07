@@ -25,4 +25,30 @@ describe('parseListCreatedAtRange', () => {
     expect(parseListCreatedAtRange()).toBeUndefined();
     expect(parseListCreatedAtRange('', '')).toBeUndefined();
   });
+
+  it('accepts leap days and explicit offsets with the same instant semantics', () => {
+    expect(parseListCreatedAtRange('2024-02-29')?.gte?.toISOString()).toBe(
+      '2024-02-28T16:00:00.000Z',
+    );
+    const range = parseListCreatedAtRange('2024-01-01T08:00:00+08:00', '2024-01-01T01:00:00Z');
+    expect(range?.gte?.toISOString()).toBe('2024-01-01T00:00:00.000Z');
+    expect(range?.lte?.toISOString()).toBe('2024-01-01T01:00:00.000Z');
+  });
+
+  it('rejects silently normalized dates, ambiguous timestamps and inverted ranges', () => {
+    for (const date of [
+      '2023-02-29',
+      '2024-02-30',
+      '2024-13-01',
+      '2024-01-01T00:00:00',
+      '0',
+      'tomorrow',
+    ]) {
+      expect(() => parseListCreatedAtRange(date)).toThrow();
+    }
+    expect(() => parseListCreatedAtRange('2024-02-01', '2024-01-31')).toThrow();
+    expect(() =>
+      parseListCreatedAtRange('2024-01-01T00:00:00Z', '2024-01-01T00:00:00+08:00'),
+    ).toThrow();
+  });
 });

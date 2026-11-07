@@ -17,8 +17,11 @@ import { getCommonConfig } from './common';
 function defineApplicationConfig(userConfigPromise?: DefineApplicationOptions) {
   return defineConfig(async (config) => {
     const options = await userConfigPromise?.(config);
-    const { appTitle, base, port, ...envConfig } = await loadAndConvertEnv();
     const { command, mode } = config;
+    const { appTitle, base, port, ...envConfig } = await loadAndConvertEnv(
+      'VITE_',
+      mode,
+    );
     const { application = {}, vite = {} } = options || {};
     const root = process.cwd();
     const isBuild = command === 'build';

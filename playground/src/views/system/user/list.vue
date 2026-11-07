@@ -124,7 +124,11 @@ async function onStatusChange(
       `你要将${row.name}的状态切换为 【${status[newStatus.toString()]}】 吗？`,
       `切换状态`,
     );
-    await updateUser(row.id, { status: newStatus });
+    const updated = await updateUser(row.id, {
+      status: newStatus as 0 | 1,
+      version: row.version,
+    });
+    row.version = updated.version;
     return true;
   } catch {
     return false;

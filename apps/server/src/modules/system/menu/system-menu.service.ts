@@ -1,17 +1,27 @@
+import { assertAffectedRoleRoutes } from '../../../common/authorization/menu-ancestors';
+import { validateMenuMeta } from '../../../common/validation/menu-meta';
+import { assertEditClaim, parseEditVersion } from '../../../common/validation/edit-version';
+import { authorizationMutation } from '../../../common/authorization/authorization-mutation';
+import type { AuthUser } from '../../../common/decorators/current-user.decorator';
+import {
+  assertGrantableCodes,
+  assertGrantableMenus,
+} from '../../../common/authorization/permission-codes';
 import {
   Injectable,
   BadRequestException,
   ConflictException,
   NotFoundException,
-} from "@nestjs/common";
-import { Prisma } from "../../../generated/prisma/client";
-import { PrismaService } from "../../../prisma/prisma.service";
-import { AuditService } from "../../audit/audit.service";
+} from '@nestjs/common';
+import { Prisma } from '../../../generated/prisma/client';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { AuditService } from '../../audit/audit.service';
 
-const MENU_TYPES = ["catalog", "menu", "button", "embedded", "link"] as const;
+const MENU_TYPES = ['catalog', 'menu', 'button', 'embedded', 'link'] as const;
 export type MenuType = (typeof MENU_TYPES)[number];
 
 export type SystemMenuNode = {
+  version: number;
   id: string;
   pid?: string;
   name: string;
@@ -34,10 +44,13 @@ export type SystemMenuInput = {
   authCode?: string | null;
   component?: string | null;
   redirect?: string | null;
-  meta?: Record<string, unknown>;
+  meta?: Record<string, unknown> | null;
 };
 
+export type SystemMenuUpdateInput = SystemMenuInput & { version: number };
+
 type MenuRow = {
+  version: number;
   id: string;
   parentId: string | null;
   name: string;
@@ -54,12 +67,12 @@ type MenuRow = {
 function normalizePid(pid: string | null | undefined): string | null {
   if (pid === undefined || pid === null) return null;
   const s = String(pid).trim();
-  if (!s || s === "0" || s === "null" || s === "undefined") return null;
+  if (!s || s === '0' || s === 'null' || s === 'undefined') return null;
   return s;
 }
 
 function metaOf(meta: unknown): Record<string, unknown> {
-  if (meta && typeof meta === "object" && !Array.isArray(meta)) {
+  if (meta && typeof meta === 'object' && !Array.isArray(meta)) {
     return meta as Record<string, unknown>;
   }
   return {};
@@ -67,6 +80,7 @@ function metaOf(meta: unknown): Record<string, unknown> {
 
 function toAdminNode(row: MenuRow): SystemMenuNode {
   const node: SystemMenuNode = {
+    version: row.version,
     id: row.id,
     name: row.name,
     path: row.path,
@@ -92,14 +106,18 @@ export class SystemMenuService {
   async list(): Promise<SystemMenuNode[]> {
     const rows = await this.prisma.menu.findMany({
       where: { deletedAt: null },
-      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     });
     return this.buildAdminTree(rows);
   }
 
-  async nameExists(name: string, id?: string): Promise<boolean> {
+  async nameExists(
+    name: string,
+    id?: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<boolean> {
     if (!name?.trim()) return false;
-    const row = await this.prisma.menu.findFirst({
+    const row = await db.menu.findFirst({
       where: {
         name: name.trim(),
         deletedAt: null,
@@ -110,9 +128,13 @@ export class SystemMenuService {
     return Boolean(row);
   }
 
-  async pathExists(path: string, id?: string): Promise<boolean> {
+  async pathExists(
+    path: string,
+    id?: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<boolean> {
     if (path === undefined || path === null) return false;
-    const row = await this.prisma.menu.findFirst({
+    const row = await db.menu.findFirst({
       where: {
         path: String(path),
         deletedAt: null,
@@ -123,23 +145,35 @@ export class SystemMenuService {
     return Boolean(row);
   }
 
-  async create(input: SystemMenuInput): Promise<SystemMenuNode> {
+  async create(input: SystemMenuInput, actor: AuthUser): Promise<SystemMenuNode> {
+    return authorizationMutation(this.prisma, actor, 'System:Menu:Create', (tx) =>
+      this.createAuthorized(input, actor.userId, tx),
+    );
+  }
+
+  private async createAuthorized(
+    input: SystemMenuInput,
+    actorId: string,
+    db: Prisma.TransactionClient,
+  ): Promise<SystemMenuNode> {
+    await assertGrantableCodes(db, actorId, input.authCode?.trim() ? [input.authCode.trim()] : []);
     this.assertType(input.type);
+    const meta = validateMenuMeta(input.meta, input.type);
     const parentId = normalizePid(input.pid);
     if (parentId) {
-      await this.requireActiveMenu(parentId);
+      const parent = await this.requireActiveMenu(parentId, db);
+      if (parent.type === 'button') throw new BadRequestException('A button cannot contain menus');
     }
-    if (await this.nameExists(input.name)) {
-      throw new ConflictException("Menu name already exists");
+    if (await this.nameExists(input.name, undefined, db)) {
+      throw new ConflictException('Menu name already exists');
     }
-    if (await this.pathExists(input.path)) {
-      throw new ConflictException("Menu path already exists");
+    if (input.type !== 'button' && (await this.pathExists(input.path, undefined, db))) {
+      throw new ConflictException('Menu path already exists');
     }
 
-    const sortOrder =
-      typeof input.meta?.order === "number" ? (input.meta.order as number) : 0;
+    const sortOrder = typeof input.meta?.order === 'number' ? input.meta.order : 0;
 
-    const row = await this.prisma.menu.create({
+    const row = await db.menu.create({
       data: {
         parentId,
         name: input.name.trim(),
@@ -149,65 +183,100 @@ export class SystemMenuService {
         authCode: input.authCode?.trim() || null,
         component: input.component?.trim() || null,
         redirect: input.redirect?.trim() || null,
-        meta: (input.meta ?? {}) as Prisma.InputJsonValue,
+        meta: meta as Prisma.InputJsonValue,
         sortOrder,
       },
     });
-    this.audit.record({
-      action: "system.menu.create",
-      module: "system.menu",
+    await this.audit.recordInTransaction(db, {
+      userId: actorId,
+      action: 'system.menu.create',
+      module: 'system.menu',
       status: 200,
       detail: { id: row.id, name: row.name },
     });
     return toAdminNode(row);
   }
 
-  async update(id: string, input: SystemMenuInput): Promise<SystemMenuNode> {
+  async update(id: string, input: SystemMenuUpdateInput, actor: AuthUser): Promise<SystemMenuNode> {
+    parseEditVersion(input.version);
+    return authorizationMutation(this.prisma, actor, 'System:Menu:Update', (tx) =>
+      this.updateAuthorized(id, input, actor.userId, tx),
+    );
+  }
+
+  private async updateAuthorized(
+    id: string,
+    input: SystemMenuUpdateInput,
+    actorId: string,
+    db: Prisma.TransactionClient,
+  ): Promise<SystemMenuNode> {
+    await assertGrantableCodes(db, actorId, input.authCode?.trim() ? [input.authCode.trim()] : []);
     this.assertType(input.type);
-    const existing = await this.requireActiveMenu(id);
-    const parentId = normalizePid(input.pid);
+    await assertGrantableMenus(db, actorId, { id });
+    const existing = await this.requireActiveMenu(id, db);
+    const meta = validateMenuMeta(
+      input.meta === undefined ? existing.meta : input.meta,
+      input.type,
+    );
+    const claim = await db.menu.updateMany({
+      where: { id, version: input.version, deletedAt: null },
+      data: { version: { increment: 1 } },
+    });
+    assertEditClaim(claim.count);
+    const parentId = input.pid === undefined ? existing.parentId : normalizePid(input.pid);
+    const descendantIds = await this.collectDescendantIds(id, db);
+    if (input.type === 'button' && descendantIds.size > 0) {
+      throw new BadRequestException('A button cannot contain menus');
+    }
 
     if (parentId === id) {
-      throw new BadRequestException("Menu cannot be its own parent");
+      throw new BadRequestException('Menu cannot be its own parent');
     }
     if (parentId) {
-      await this.requireActiveMenu(parentId);
-      const descendantIds = await this.collectDescendantIds(id);
+      const parent = await this.requireActiveMenu(parentId, db);
+      if (parent.type === 'button') throw new BadRequestException('A button cannot contain menus');
       if (descendantIds.has(parentId)) {
-        throw new BadRequestException("Cannot move menu under its descendant");
+        throw new BadRequestException('Cannot move menu under its descendant');
       }
     }
 
-    if (await this.nameExists(input.name, id)) {
-      throw new ConflictException("Menu name already exists");
+    if (await this.nameExists(input.name, id, db)) {
+      throw new ConflictException('Menu name already exists');
     }
-    if (await this.pathExists(input.path, id)) {
-      throw new ConflictException("Menu path already exists");
+    if (input.type !== 'button' && (await this.pathExists(input.path, id, db))) {
+      throw new ConflictException('Menu path already exists');
     }
 
+    // meta is replaced as one object; omitting it preserves both JSON and sorting.
     const sortOrder =
-      typeof input.meta?.order === "number"
-        ? (input.meta.order as number)
-        : existing.sortOrder;
+      input.meta === undefined
+        ? existing.sortOrder
+        : typeof input.meta?.order === 'number'
+          ? input.meta.order
+          : 0;
 
-    const row = await this.prisma.menu.update({
+    const row = await db.menu.update({
       where: { id },
       data: {
         parentId,
         name: input.name.trim(),
         path: input.path,
         type: input.type,
-        status: input.status === 0 ? 0 : 1,
-        authCode: input.authCode?.trim() || null,
-        component: input.component?.trim() || null,
-        redirect: input.redirect?.trim() || null,
-        meta: (input.meta ?? {}) as Prisma.InputJsonValue,
+        status: input.status,
+        authCode: input.authCode === undefined ? undefined : input.authCode?.trim() || null,
+        component: input.component === undefined ? undefined : input.component?.trim() || null,
+        redirect: input.redirect === undefined ? undefined : input.redirect?.trim() || null,
+        meta: input.meta === undefined ? undefined : (meta as Prisma.InputJsonValue),
         sortOrder,
       },
     });
-    this.audit.record({
-      action: "system.menu.update",
-      module: "system.menu",
+    if (parentId !== existing.parentId || input.type !== existing.type) {
+      await assertAffectedRoleRoutes(db, [id, ...descendantIds]);
+    }
+    await this.audit.recordInTransaction(db, {
+      userId: actorId,
+      action: 'system.menu.update',
+      module: 'system.menu',
       status: 200,
       detail: { id: row.id, name: row.name },
     });
@@ -218,15 +287,26 @@ export class SystemMenuService {
    * Soft-delete menu + descendants. Renames unique `name` so the slot can be reused.
    * RoleMenu rows stay (FK); GET /menu/all already filters deletedAt.
    */
-  async remove(id: string): Promise<{ id: string }> {
-    await this.requireActiveMenu(id);
-    const ids = [id, ...[...(await this.collectDescendantIds(id))]];
+  async remove(id: string, actor: AuthUser): Promise<{ id: string }> {
+    return authorizationMutation(this.prisma, actor, 'System:Menu:Delete', (tx) =>
+      this.removeAuthorized(id, actor.userId, tx),
+    );
+  }
+
+  private async removeAuthorized(
+    id: string,
+    actorId: string,
+    db: Prisma.TransactionClient,
+  ): Promise<{ id: string }> {
+    await this.requireActiveMenu(id, db);
+    const ids = [id, ...[...(await this.collectDescendantIds(id, db))]];
+    await assertGrantableMenus(db, actorId, { id: { in: ids } });
     const now = new Date();
     const stamp = now.getTime();
-    await this.prisma.$transaction(
+    await Promise.all(
       ids.map((menuId, index) => {
-        const short = menuId.replace(/-/g, "").slice(0, 8);
-        return this.prisma.menu.update({
+        const short = menuId.replaceAll('-', '').slice(0, 8);
+        return db.menu.update({
           where: { id: menuId },
           data: {
             deletedAt: now,
@@ -236,9 +316,10 @@ export class SystemMenuService {
         });
       }),
     );
-    this.audit.record({
-      action: "system.menu.delete",
-      module: "system.menu",
+    await this.audit.recordInTransaction(db, {
+      userId: actorId,
+      action: 'system.menu.delete',
+      module: 'system.menu',
       status: 200,
       detail: { id },
     });
@@ -247,24 +328,28 @@ export class SystemMenuService {
 
   private assertType(type: string): asserts type is MenuType {
     if (!(MENU_TYPES as readonly string[]).includes(type)) {
-      throw new BadRequestException(
-        `Invalid menu type (expected ${MENU_TYPES.join("|")})`,
-      );
+      throw new BadRequestException(`Invalid menu type (expected ${MENU_TYPES.join('|')})`);
     }
   }
 
-  private async requireActiveMenu(id: string): Promise<MenuRow> {
-    const row = await this.prisma.menu.findFirst({
+  private async requireActiveMenu(
+    id: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<MenuRow> {
+    const row = await db.menu.findFirst({
       where: { id, deletedAt: null },
     });
     if (!row) {
-      throw new NotFoundException("Menu not found");
+      throw new NotFoundException('Menu not found');
     }
     return row;
   }
 
-  private async collectDescendantIds(rootId: string): Promise<Set<string>> {
-    const all = await this.prisma.menu.findMany({
+  private async collectDescendantIds(
+    rootId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Set<string>> {
+    const all = await db.menu.findMany({
       where: { deletedAt: null },
       select: { id: true, parentId: true },
     });
@@ -277,7 +362,7 @@ export class SystemMenuService {
     }
     const out = new Set<string>();
     const stack = [...(children.get(rootId) ?? [])];
-    while (stack.length) {
+    while (stack.length > 0) {
       const cur = stack.pop()!;
       if (out.has(cur)) continue;
       out.add(cur);

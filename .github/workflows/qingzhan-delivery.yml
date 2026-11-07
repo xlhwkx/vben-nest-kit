@@ -1,0 +1,129 @@
+name: Qingzhan delivery
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qingzhan-delivery-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Delivery types, regressions and builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      NODE_OPTIONS: --max-old-space-size=8192
+      VITE_GLOB_API_URL: /api
+      VITE_NITRO_MOCK: 'false'
+      VITE_CAPTCHA_E2E_BYPASS: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check:delivery:types
+      - run: pnpm check:delivery:lint
+      - name: Server navigation provisioning lint
+        working-directory: apps/server
+        run: pnpm exec eslint src/common/authorization/admin-routes.ts src/cli/provision-admin-routes.ts src/cli/bootstrap-admin.ts test/management-edits.e2e-spec.ts
+      - name: Browser and artifact script syntax
+        run: |
+          node --check scripts/qingzhan/browser-auth-regression.mjs
+          node --check scripts/qingzhan/browser-delivery-regression.mjs
+          node --check scripts/qingzhan/run-browser-regression.mjs
+          node --check scripts/qingzhan/check-delivery-artifacts.mjs
+      - run: pnpm test:delivery
+      - run: pnpm build:admin
+      - run: pnpm --filter @vben/web-antd build
+      - run: pnpm check:delivery:artifacts
+
+  browser:
+    name: Browser integration (${{ matrix.app }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [playground, web-antd]
+    env:
+      CI: 'true'
+      NODE_ENV: test
+      NODE_OPTIONS: --max-old-space-size=8192
+      COMPOSE_PROJECT_NAME: qingzhan-browser-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.app }}
+      AUTH_BROWSER_APP: ${{ matrix.app }}
+      AUTH_BROWSER_ALLOW_MUTATION: 'true'
+      AUTH_BROWSER_USERNAME: vben
+      AUTH_BROWSER_PASSWORD: '123456'
+      AUTH_BROWSER_SECONDARY_USERNAME: admin
+      AUTH_BROWSER_SECONDARY_PASSWORD: '123456'
+      ALLOW_DEMO_SEED: 'true'
+      JWT_ACCESS_TTL: 30m
+      JWT_REFRESH_TTL: 7d
+      COOKIE_SECURE: 'false'
+      COOKIE_SAME_SITE: lax
+      CORS_ORIGINS: http://127.0.0.1:5555,http://127.0.0.1:5666
+      APP_PUBLIC_URL: http://127.0.0.1:5320
+      THROTTLE_STORAGE: redis
+      THROTTLE_LIMIT: '10000'
+      THROTTLE_LOGIN_LIMIT: '1000'
+      AUTH_FAIL_MAX: '1000'
+      AUTH_FAIL_IP_MAX: '10000'
+      CAPTCHA_REQUIRED: 'false'
+      CAPTCHA_E2E_BYPASS: 'false'
+      VITE_CAPTCHA_REQUIRED: 'false'
+      VITE_CAPTCHA_E2E_BYPASS: 'false'
+      VITE_NITRO_MOCK: 'false'
+      METRICS_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Generate disposable credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in POSTGRES_PASSWORD REDIS_PASSWORD JWT_ACCESS_SECRET JWT_REFRESH_SECRET; do
+            value=$(openssl rand -hex 32)
+            echo "::add-mask::$value"
+            echo "$key=$value" >> "$GITHUB_ENV"
+          done
+      - name: Configure isolated DB and Redis
+        shell: bash
+        run: |
+          echo "DATABASE_URL=postgresql://qingzhan:${POSTGRES_PASSWORD}@127.0.0.1:55433/qingzhan_browser?schema=public" >> "$GITHUB_ENV"
+          echo "REDIS_URL=redis://:${REDIS_PASSWORD}@127.0.0.1:56379/0" >> "$GITHUB_ENV"
+      - run: pnpm install --frozen-lockfile
+      - run: docker compose -f scripts/qingzhan/compose.browser-ci.yml up -d --wait
+      - name: Migrate and opt in to demo accounts on this disposable database
+        working-directory: apps/server
+        run: |
+          pnpm exec prisma migrate deploy
+          pnpm exec prisma db seed
+          pnpm build
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Real API, cookies, account changes, logout and iframe boundaries
+        run: pnpm test:delivery:browser
+      - name: Remove only this job's disposable infrastructure
+        if: always()
+        run: docker compose -f scripts/qingzhan/compose.browser-ci.yml down -v --remove-orphans

@@ -11,6 +11,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Express } from 'express';
 import { UploadService } from './upload.service';
+import { UploadCapacityInterceptor } from './upload-capacity.interceptor';
 
 @ApiTags('Upload')
 @ApiBearerAuth('Bearer')
@@ -21,7 +22,7 @@ export class UploadController {
   /** Limits come from MulterModule.registerAsync (ConfigService UPLOAD_MAX_BYTES). */
   @Post()
   @HttpCode(200)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(UploadCapacityInterceptor, FileInterceptor('file'))
   async upload(@UploadedFile() file?: Express.Multer.File) {
     if (!file) {
       throw new BadRequestException('file is required');

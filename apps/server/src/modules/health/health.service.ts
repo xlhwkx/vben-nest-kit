@@ -5,6 +5,16 @@ import { RedisService } from '../../redis/redis.service';
 
 @Injectable()
 export class HealthService {
+  private readyInFlight?: Promise<{
+    status: 'ok';
+    postgres: true;
+    redis: true;
+  }>;
+  private readyCache?: {
+    expiresAt: number;
+    result?: { status: 'ok'; postgres: true; redis: true };
+    error?: Error;
+  };
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
@@ -28,6 +38,36 @@ export class HealthService {
    * Failures → 503 envelope (no stack / internal detail).
    */
   async ready() {
+    const cached = this.readyCache;
+    if (cached && cached.expiresAt > Date.now()) {
+      if (cached.error) throw cached.error;
+      return cached.result!;
+    }
+    if (this.readyInFlight) return this.readyInFlight;
+    this.readyInFlight = this.probeReady()
+      .then(
+        (result) => {
+          this.readyCache = { result, expiresAt: Date.now() + 1000 };
+          return result;
+        },
+        (error: unknown) => {
+          const failure =
+            error instanceof Error ? error : new ServiceUnavailableException('Not ready');
+          this.readyCache = { error: failure, expiresAt: Date.now() + 1000 };
+          throw failure;
+        },
+      )
+      .finally(() => {
+        this.readyInFlight = undefined;
+      });
+    return this.readyInFlight;
+  }
+
+  private async probeReady(): Promise<{
+    status: 'ok';
+    postgres: true;
+    redis: true;
+  }> {
     let postgres = false;
     let redis = false;
 

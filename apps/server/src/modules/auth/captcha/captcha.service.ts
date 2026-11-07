@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { RedisService } from '../../../redis/redis.service';
@@ -69,9 +74,11 @@ export class CaptchaService {
 
     const captchaId = randomUUID().replaceAll('-', '');
     const captchaToken = randomBytes(24).toString('base64url');
-    const ok = await this.storeChallenge(captchaId, captchaToken);
-    if (!ok) {
-      throw new BadRequestException({
+    try {
+      await this.redis.setStrict(KEY_PREFIX + captchaId, sha256(captchaToken), CAPTCHA_TTL_SEC);
+    } catch {
+      this.logger.warn('Captcha store unavailable');
+      throw new ServiceUnavailableException({
         message: 'Captcha unavailable',
         error: 'Captcha store unavailable',
       });
@@ -109,31 +116,23 @@ export class CaptchaService {
     }
 
     const key = KEY_PREFIX + id;
-    const stored = await this.redis.get(key);
+    let stored: string | null;
+    try {
+      stored = await this.redis.getDelStrict(key);
+    } catch {
+      throw new ServiceUnavailableException('Captcha store unavailable');
+    }
     if (!stored) {
       throw new BadRequestException({
         message: 'Invalid or expired captcha',
         error: 'Invalid or expired captcha',
       });
     }
-    await this.redis.del(key);
     if (stored !== sha256(token)) {
       throw new BadRequestException({
         message: 'Invalid captcha',
         error: 'Invalid captcha',
       });
-    }
-  }
-
-  private async storeChallenge(captchaId: string, captchaToken: string): Promise<boolean> {
-    try {
-      await this.redis.set(KEY_PREFIX + captchaId, sha256(captchaToken), CAPTCHA_TTL_SEC);
-      // Confirm write (set() swallows Redis errors)
-      const got = await this.redis.get(KEY_PREFIX + captchaId);
-      return got === sha256(captchaToken);
-    } catch (error) {
-      this.logger.warn(`captcha store failed: ${String(error)}`);
-      return false;
     }
   }
 }

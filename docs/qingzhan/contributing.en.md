@@ -32,19 +32,17 @@ Usual host ports: Postgres **55433**, Redis **56379**, Nest **5320** (see `.env.
 Prefer the monorepo root:
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 pnpm --filter @qingzhan/server start:dev
 ```
 
-If root `pnpm install` fails on upstream Vben postinstall / leftovers, **server fallback**:
+For backend-only development, use the workspace filter from the repository root, keeping the root lockfile and build allowlist:
 
 ```bash
-cd apps/server
-pnpm install --ignore-workspace
-pnpm exec prisma generate
-pnpm exec prisma migrate deploy
-pnpm exec prisma db seed
-pnpm start:dev
+IGNORE_STUB=1 pnpm install --frozen-lockfile --filter @qingzhan/server...
+pnpm --filter @qingzhan/server exec prisma migrate deploy
+ALLOW_DEMO_SEED=true pnpm --filter @qingzhan/server exec prisma db seed
+pnpm --filter @qingzhan/server start:dev
 ```
 
 `apps/server/pnpm-lock.yaml` is gitignored; workspace installs use the root lockfile.
@@ -58,11 +56,11 @@ pnpm test:e2e
 
 Requires Compose + `.env` + seed. Node engines: `^22.18 || ^24.12` (tests use `--experimental-vm-modules`). See `apps/server/README.md`.
 
-### Frontend wiring (web-antd)
+### Frontend wiring
 
 Repo already sets `VITE_NITRO_MOCK=false`, `accessMode: 'backend'`, and proxy to Nest. Clear localStorage after preference changes.
 
-**Clean machines must run root `pnpm install`** (including the postinstall stub). Installing only `apps/server` is not enough for `pnpm dev:antd`. If `@vben/vite-config` fails to resolve, check `internal/vite-config/dist/index.mjs` and run `pnpm -r run --if-present stub`, then `pnpm dev:antd` (http://localhost:5666). Details: root `README.md` (frontend section).
+Use `pnpm dev:admin` for the management pages (playground, http://localhost:5555). `pnpm dev:antd` provides the other UI integration example (http://localhost:5666). Clean machines need a full root `pnpm install --frozen-lockfile`, including postinstall stubs. If `@vben/vite-config` cannot resolve, finish installing and run `pnpm -r run --if-present stub`. See the root README for setup and the [acceptance runbook](./production-acceptance.md) for delivery commands and evidence requirements.
 
 ## Safety
 

@@ -5,6 +5,8 @@
 
 **禁止**：在生产库执行 `prisma migrate reset` / `db push --force-reset` / 无备份的 `DROP SCHEMA`；本仓库 CI **不**自动跑破坏性迁移。
 
+2026-11-07 已在隔离 PostgreSQL 16 做过一次自定义格式备份/恢复：12 张表行集合摘要一致，字典版本触发器恢复后可递增/回滚。范围与限制见[第四轮记录](./production-hardening-phase4-2026-11-07.md)；这不是生产容量或文件存储的恢复演练。新版本备份需包含 `dictionary_revision` 表及字典表的触发器和函数，不能仅复制业务表数据。
+
 ## 服务名与默认凭据（Compose）
 
 | 场景 | Compose 文件 | Postgres 服务 | Redis 服务 | 备注 |
@@ -95,6 +97,7 @@ Prisma Migrate **没有**一键「生产 down」安全通道。约定：
 docker compose up -d
 cd apps/server
 pnpm exec prisma migrate deploy
+# Development/test only: set ALLOW_DEMO_SEED=true in apps/server/.env first
 pnpm exec prisma db seed   # 仅开发/演练库
 ```
 

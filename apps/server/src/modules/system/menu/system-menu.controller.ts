@@ -1,5 +1,14 @@
+import { editVersionSchema } from '../../../common/validation/edit-version';
+import { menuMetaSchema } from '../../../common/validation/menu-meta';
 import {
-  BadRequestException,
+  parseRequest,
+  uuidSchema,
+  requiredText,
+  parentIdSchema,
+  optionalQueryId,
+  parseQuery,
+} from '../../../common/validation/request-validation';
+import {
   Body,
   Controller,
   Delete,
@@ -10,112 +19,79 @@ import {
   Put,
   Query,
   VERSION_NEUTRAL,
-} from "@nestjs/common";
-import { z } from "zod";
-import { RequirePermissions } from "../../../common/decorators/require-permissions.decorator";
-import {
-  SystemMenuService,
-  type SystemMenuInput,
-} from "./system-menu.service";
+} from '@nestjs/common';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import type { AuthUser } from '../../../common/decorators/current-user.decorator';
+import { z } from 'zod';
+import { RequirePermissions } from '../../../common/decorators/require-permissions.decorator';
+import { SystemMenuService } from './system-menu.service';
+import type { SystemMenuInput } from './system-menu.service';
 
-const menuTypes = ["catalog", "menu", "button", "embedded", "link"] as const;
+const menuTypes = ['catalog', 'menu', 'button', 'embedded', 'link'] as const;
 
 const menuBodySchema = z.object({
-  name: z.string().min(1).max(128),
+  name: requiredText(128),
   path: z.string().max(255),
   type: z.enum(menuTypes),
-  pid: z.union([z.string(), z.null()]).optional(),
+  pid: parentIdSchema.optional(),
   status: z.union([z.literal(0), z.literal(1)]).optional(),
   authCode: z.union([z.string().max(128), z.null()]).optional(),
   component: z.union([z.string().max(255), z.null()]).optional(),
   redirect: z.union([z.string().max(255), z.null()]).optional(),
-  meta: z.record(z.string(), z.unknown()).optional(),
+  meta: menuMetaSchema.nullable().optional(),
 });
 
 function parseMenuBody(body: unknown): SystemMenuInput {
-  const parsed = menuBodySchema.safeParse(body);
-  if (!parsed.success) {
-    throw new BadRequestException({
-      message: "BadRequestException",
-      error: parsed.error.issues.map((i) => i.message).join("; "),
-    });
-  }
-  const d = parsed.data;
-  return {
-    name: d.name,
-    path: d.path,
-    type: d.type,
-    pid: d.pid,
-    status: d.status,
-    authCode: d.authCode,
-    component: d.component,
-    redirect: d.redirect,
-    meta: d.meta,
-  };
+  return parseRequest(menuBodySchema, body);
 }
 
-@Controller({ path: "system/menu", version: [VERSION_NEUTRAL, "1"] })
+@Controller({ path: 'system/menu', version: [VERSION_NEUTRAL, '1'] })
 export class SystemMenuController {
   constructor(private readonly menus: SystemMenuService) {}
 
-  /** list/exists: Bearer only (JwtAuthGuard); no write permission required */
-  @Get("list")
+  /** Read permission is required for the tree and uniqueness checks. */
+  @Get('list')
+  @RequirePermissions('System:Menu:List')
   async list() {
     return this.menus.list();
   }
 
-  @Get("name-exists")
-  async nameExists(
-    @Query("name") name?: string,
-    @Query("id") id?: string,
-  ): Promise<boolean> {
-    if (!name?.trim()) {
-      throw new BadRequestException({
-        message: "BadRequestException",
-        error: "name is required",
-      });
-    }
-    return this.menus.nameExists(name, id);
+  @Get('name-exists')
+  @RequirePermissions('System:Menu:List')
+  async nameExists(@Query() query: unknown): Promise<boolean> {
+    const parsed = parseQuery(z.object({ name: requiredText(128), id: optionalQueryId }), query);
+    return this.menus.nameExists(parsed.name, parsed.id);
   }
 
-  @Get("path-exists")
-  async pathExists(
-    @Query("path") path?: string,
-    @Query("id") id?: string,
-  ): Promise<boolean> {
-    if (path === undefined || path === null) {
-      throw new BadRequestException({
-        message: "BadRequestException",
-        error: "path is required",
-      });
-    }
-    return this.menus.pathExists(path, id);
+  @Get('path-exists')
+  @RequirePermissions('System:Menu:List')
+  async pathExists(@Query() query: unknown): Promise<boolean> {
+    const parsed = parseQuery(z.object({ path: z.string().max(255), id: optionalQueryId }), query);
+    return this.menus.pathExists(parsed.path, parsed.id);
   }
 
   @Post()
   @HttpCode(200)
-  @RequirePermissions("System:Menu:Create")
-  async create(@Body() body: unknown) {
-    return this.menus.create(parseMenuBody(body));
+  @RequirePermissions('System:Menu:Create')
+  async create(@Body() body: unknown, @CurrentUser() actor: AuthUser) {
+    return this.menus.create(parseMenuBody(body), actor);
   }
 
-  @Put(":id")
+  @Put(':id')
   @HttpCode(200)
-  @RequirePermissions("System:Menu:Update")
-  async update(@Param("id") id: string, @Body() body: unknown) {
-    if (!id?.trim()) {
-      throw new BadRequestException("id is required");
-    }
-    return this.menus.update(id, parseMenuBody(body));
+  @RequirePermissions('System:Menu:Update')
+  async update(@Param('id') id: string, @Body() body: unknown, @CurrentUser() actor: AuthUser) {
+    return this.menus.update(
+      parseRequest(uuidSchema, id),
+      parseRequest(menuBodySchema.extend({ version: editVersionSchema }), body),
+      actor,
+    );
   }
 
-  @Delete(":id")
+  @Delete(':id')
   @HttpCode(200)
-  @RequirePermissions("System:Menu:Delete")
-  async remove(@Param("id") id: string) {
-    if (!id?.trim()) {
-      throw new BadRequestException("id is required");
-    }
-    return this.menus.remove(id);
+  @RequirePermissions('System:Menu:Delete')
+  async remove(@Param('id') id: string, @CurrentUser() actor: AuthUser) {
+    return this.menus.remove(parseRequest(uuidSchema, id), actor);
   }
 }

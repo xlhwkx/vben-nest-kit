@@ -31,14 +31,19 @@ const [Form, formApi] = useVbenForm({
 const permissions = ref<DataNode[]>([]);
 const loadingPermissions = ref(false);
 
-const id = ref();
 const [Drawer, drawerApi] = useVbenDrawer<null | SystemRoleApi.SystemRole>({
   async onConfirm() {
     const { valid } = await formApi.validate();
     if (!valid) return;
     const values = await formApi.getValues();
     drawerApi.lock();
-    (id.value ? updateRole(id.value, values) : createRole(values))
+    (formData.value
+      ? updateRole(formData.value.id, {
+          ...values,
+          version: formData.value.version,
+        })
+      : createRole(values)
+    )
       .then(() => {
         emits('success');
         drawerApi.close();
@@ -53,17 +58,9 @@ const [Drawer, drawerApi] = useVbenDrawer<null | SystemRoleApi.SystemRole>({
       const data = drawerApi.getData();
       formApi.reset();
 
-      if (data) {
-        formData.value = data;
-        id.value = data.id;
-      } else {
-        formData.value = undefined;
-        id.value = undefined;
-      }
+      formData.value = data ? { ...data } : undefined;
 
-      if (permissions.value.length === 0) {
-        await loadPermissions();
-      }
+      await loadPermissions();
       // Wait for Vue to flush DOM updates (form fields mounted)
       await nextTick();
       if (data) {
@@ -108,6 +105,7 @@ function getNodeClass(node: Recordable<any>) {
           <Tree
             :tree-data="permissions"
             multiple
+            include-indeterminate
             bordered
             :default-expanded-level="2"
             :get-node-class="getNodeClass"

@@ -5,13 +5,16 @@ import { useRouter } from 'vue-router';
 
 import { LOGIN_PATH } from '@vben/constants';
 import { preferences } from '@vben/preferences';
+import { accessTokenSubject } from '@vben/request';
 import { resetAllStores, useAccessStore, useUserStore } from '@vben/stores';
 
 import { notification } from 'antdv-next';
 import { defineStore } from 'pinia';
 
 import { getAccessCodesApi, getUserInfoApi, loginApi, logoutApi } from '#/api';
+import { authSession, coordinateAuth } from '#/api/request';
 import { $t } from '#/locales';
+import { resetRoutes } from '#/router';
 
 export const useAuthStore = defineStore('auth', () => {
   const accessStore = useAccessStore();
@@ -34,19 +37,35 @@ export const useAuthStore = defineStore('auth', () => {
     let userInfo: null | UserInfo = null;
     try {
       loginLoading.value = true;
-      const { accessToken } = await loginApi(params);
+      authSession.change();
+      const loginSnapshot = authSession.capture(accessStore.accessToken);
+      const { accessToken } = await coordinateAuth(() => {
+        authSession.assertCurrent(loginSnapshot, accessStore.accessToken);
+        return loginApi(params);
+      });
+      authSession.assertCurrent(loginSnapshot, accessStore.accessToken);
 
       // 如果成功获取到 accessToken
       if (accessToken) {
+        if (
+          accessTokenSubject(accessToken) !==
+          accessTokenSubject(accessStore.accessToken)
+        ) {
+          resetAllStores();
+          resetRoutes();
+        }
         accessStore.setAccessToken(accessToken);
+        const signedInSnapshot = authSession.capture(accessToken);
 
         // 获取用户信息并存储到 accessStore 中
         const [fetchUserInfoResult, accessCodes] = await Promise.all([
-          fetchUserInfo(),
+          getUserInfoApi(),
           getAccessCodesApi(),
         ]);
+        authSession.assertCurrent(signedInSnapshot, accessStore.accessToken);
 
         userInfo = fetchUserInfoResult;
+        userStore.setUserInfo(userInfo);
 
         accessStore.setAccessCodes(accessCodes);
 
@@ -79,20 +98,38 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isLoggingOut = ref(false); // 正在 logout 标识, 防止 /logout 死循环.
 
-  async function logout(redirect: boolean = true) {
-    if (isLoggingOut.value) return; // 正在登出中, 说明已进入循环, 直接返回.
+  async function logout(
+    redirect: boolean = true,
+    options: { revokeSession?: boolean } = {},
+  ) {
+    if (isLoggingOut.value) return false;
     isLoggingOut.value = true; // 设置 标识
+    if (options.revokeSession === false) authSession.reset();
+    else authSession.change();
+    const snapshot = authSession.capture(accessStore.accessToken);
 
     try {
-      await logoutApi();
+      if (options.revokeSession !== false)
+        await coordinateAuth(() => {
+          authSession.assertCurrent(snapshot, accessStore.accessToken);
+          return logoutApi(snapshot.principal ?? undefined);
+        });
     } catch {
-      // 不做任何处理
+      if (authSession.isLocalCurrent(snapshot))
+        notification.error({
+          title: '退出未完成',
+          description: '服务端会话撤销未确认，请重试退出。当前登录状态已保留。',
+          duration: 0,
+        });
+      return false;
     } finally {
       isLoggingOut.value = false; // 重置 标识
-
-      resetAllStores();
-      accessStore.setLoginExpired(false);
     }
+    if (!authSession.isLocalCurrent(snapshot)) return false;
+    authSession.reset();
+    resetAllStores();
+    resetRoutes();
+    accessStore.setLoginExpired(false);
 
     // 已经在登录页时不能再带 redirect：此时 currentRoute.fullPath 就是登录页本身，
     // 再编码一层会得到「登录页?redirect=编码后的登录页」，下一次又在这个基础上再包一层，

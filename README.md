@@ -4,173 +4,103 @@
 
 # 青栈（vben-nest-kit）
 
-> **青栈** = 官方 [Vue Vben Admin](https://github.com/vbenjs/vue-vben-admin) 前端 monorepo + 自研 NestJS 后端（`apps/server`），用真实后端替换 `backend-mock`。
+青栈基于 [Vue Vben Admin](https://github.com/vbenjs/vue-vben-admin) monorepo，提供适配 Vben 的 NestJS 后端与管理页面。后端是模块化单体，使用 PostgreSQL、Prisma、Redis；通过真实 API 提供认证、角色权限、动态菜单、用户、部门、字典、审计和上传。
 
-[![Qingzhan server e2e](https://github.com/xlhwkx/vben-nest-kit/actions/workflows/qingzhan-server-e2e.yml/badge.svg)](https://github.com/xlhwkx/vben-nest-kit/actions/workflows/qingzhan-server-e2e.yml)
-[![license](https://img.shields.io/github/license/xlhwkx/vben-nest-kit.svg)](LICENSE)
+[![Server e2e](https://github.com/xlhwkx/vben-nest-kit/actions/workflows/qingzhan-server-e2e.yml/badge.svg)](https://github.com/xlhwkx/vben-nest-kit/actions/workflows/qingzhan-server-e2e.yml) [![Delivery](https://github.com/xlhwkx/vben-nest-kit/actions/workflows/qingzhan-delivery.yml/badge.svg)](https://github.com/xlhwkx/vben-nest-kit/actions/workflows/qingzhan-delivery.yml) [![license](https://img.shields.io/github/license/xlhwkx/vben-nest-kit.svg)](LICENSE)
 
-许可证：**MIT**（根 `LICENSE` 保留上游 Vben 版权声明）。上游说明：[README.vben.md](README.vben.md) / [README.zh-CN.md](README.zh-CN.md)（官方仓库 [vbenjs/vue-vben-admin](https://github.com/vbenjs/vue-vben-admin)）。
+MIT 许可证；根 LICENSE 保留上游版权。上游说明见 [README.vben.md](README.vben.md) / [README.zh-CN.md](README.zh-CN.md)。项目问题请提交至[本仓库 Issues](https://github.com/xlhwkx/vben-nest-kit/issues)。安全问题请勿公开凭据或可利用细节；可使用仓库启用后的 GitHub 私密漏洞报告入口。
 
-## 目录结构
+## 支持的交付入口
 
-```
-vben-nest-kit/
-├── 规则/                      # 真源：技术方案 + API 合同（优先于口头约定）
-├── docs/qingzhan/               # 青栈架构/贡献（中英；VitePress 仍在 docs/src）
-├── apps/
-│   ├── server/                # 青栈 Nest 12 后端（本仓库交付主体）
-│   ├── web-antd/              # Vben Ant Design Vue 前端
-│   ├── backend-mock/          # 官方 mock（仅对照，非交付）
-│   └── web-*                  # 其它 UI 变体
-├── packages/                  # Vben 共享包
-├── docker-compose.yml         # Postgres 16 + Redis 7（Redis 默认 requirepass）
-├── .env.example               # 环境变量模板（勿提交 .env）
-├── README.md                  # 本文件（青栈说明）
-└── README.vben.md / README.zh-CN.md  # 上游 Vben 说明
-```
+| 路径 | 定位 | 开发地址 |
+| --- | --- | --- |
+| `apps/server` | Nest 后端 | `http://localhost:5320/api` |
+| `playground` | 青栈完整管理前端，包含用户/角色/菜单/部门/字典页面 | `http://localhost:5555` |
+| `apps/web-antd` | 另一套 UI 的认证与动态路由接入示例，管理页面尚未移植 | `http://localhost:5666` |
+| `apps/backend-mock`、其他 `web-*` | 上游演示与对照，未纳入青栈交付保证 | — |
 
-## 真源文档
+两套接入前端均关闭 Nitro mock、使用后端路由和自动续期。切换旧版本时需清除浏览器中旧的偏好设置，确认 `accessMode=backend`、`enableRefreshToken=true`。playground 使用独立的 `qingzhan-admin-v1` 缓存命名空间。
 
-- `规则/vben-nestjs-backend-tech-plan.md` — 技术选型与里程碑
-- `规则/api-contract-vben.md` — 路径 / 方法 / 信封 / Cookie / Bearer
+## 本地快速开始
 
-### 青栈可读文档（摘要，不替代合同）
+推荐 Node **24.12+（24.x）**，pnpm **11.16.0**（以根 `packageManager` 为准）。根 engines 同时允许 Node 22.18+；新增交付 CI 使用 Node 24。现代浏览器需支持 ES2022；多标签页续期协调依赖 Web Locks。
 
-- 架构：[docs/qingzhan/architecture.md](docs/qingzhan/architecture.md) · English: [docs/qingzhan/architecture.en.md](docs/qingzhan/architecture.en.md)
-- 贡献：[docs/qingzhan/contributing.md](docs/qingzhan/contributing.md) · English: [docs/qingzhan/contributing.en.md](docs/qingzhan/contributing.en.md)
-- 索引：`docs/qingzhan/README.md`
-- 青栈 Changelog：[CHANGELOG.qingzhan.md](CHANGELOG.qingzhan.md)
-- v0.1 Release 草稿：[docs/qingzhan/release-notes-v0.1.md](docs/qingzhan/release-notes-v0.1.md)
-- v0.2 Release 草稿：[docs/qingzhan/release-notes-v0.2.0.md](docs/qingzhan/release-notes-v0.2.0.md)
-- 开源检查清单（**Public / Release 须用户点头**）：[docs/qingzhan/open-source-checklist.md](docs/qingzhan/open-source-checklist.md)
-- **产品文档站（VitePress）**：[docs-site/](docs-site/) · 本地 `pnpm docs:dev` / `pnpm docs:build` · Pages：[.github/workflows/qingzhan-pages.yml](.github/workflows/qingzhan-pages.yml)（**Public 后** Settings → Pages → GitHub Actions）
-- Logo： [docs-site/public/logo.svg](docs-site/public/logo.svg)
-- 发版 workflow 草稿（默认 `if: false`）：`.github/workflows/qingzhan-release.yml`
-
-## 后端（apps/server）快速开始
+以下为 Bash 命令；PowerShell 可用 `Copy-Item` 复制文件、`$env:ALLOW_DEMO_SEED='true'` 设置开关。不要覆盖已有环境文件。
 
 ```bash
-# 1) 基础设施
+# 仓库根目录；首次配置
 cp .env.example .env
-docker compose up -d
+cp apps/server/.env.example apps/server/.env
+# 两份配置中的 DB/Redis/密钥须一致；模板仅用于本地开发
+pnpm install --frozen-lockfile
+docker compose up -d --wait
 
-# 2) 安装依赖
-# 主路径：仓库根（pnpm workspace 会纳入 @qingzhan/server）
-pnpm install
+pnpm --filter @qingzhan/server exec prisma migrate deploy
+ALLOW_DEMO_SEED=true pnpm --filter @qingzhan/server exec prisma db seed
 
-# 若根目录 pnpm install 因 Vben 上游 postinstall / leftover 失败，用 fallback：
-cd apps/server
-pnpm install --ignore-workspace
-cd ../..
-
-# 稳定后优先：
-# pnpm --filter @qingzhan/server ...
-
-# 3) 仅跑 Nest
+# 终端 1
 pnpm --filter @qingzhan/server start:dev
-# 若未走 workspace filter，可：
-# cd apps/server && pnpm start:dev
-# 默认 http://localhost:5320/api/health、/api/v1/health/live|/ready；Swagger /api/docs
+# 终端 2
+pnpm dev:admin
 ```
 
-**安装说明：** 根 `pnpm install` 会跑 Vben monorepo 的 postinstall；若因网络/leftover 失败，**不要阻塞后端**——改用 `cd apps/server && pnpm install --ignore-workspace`。`apps/server/pnpm-lock.yaml` 已加入 `.gitignore`（workspace 场景下以根 lock 为准）。目标是把 `@qingzhan/server` 稳定进根 workspace（`pnpm --filter @qingzhan/server`），当前允许上述 fallback。
+开发种子账号：`vben` / `admin` / `jack`，密码均为 `123456`。仅前两者获管理入口和管理权限。种子必须显式开启 `ALLOW_DEMO_SEED=true`；禁止用于生产库，不能用于生产升级。
 
-当前切片（Auth P0）：
+默认宿主端口为 PG **55433**、Redis **56379**，可在环境文件修改。API 探针：`/api/health/live`、`/api/health/ready`；开发 Swagger 为 `/api/docs`。
 
-- Prisma 7 + PostgreSQL（User/Role/Permission/RefreshToken）
-- Argon2id + JWT access/refresh（refresh 哈希入库，Cookie 名 `jwt`）
-- Redis 权限码短缓存（`perm:codes:{userId}`）
-- CORS credentials + Cookie sameSite/secure 可配
-
-
-## Auth P0（已落地）
-
-合同路径（均挂 `/api` 与 `/api/v1`）：
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/auth/login` | 信封；`data.accessToken`；Set-Cookie `jwt`=refresh；**不返回 password** |
-| POST | `/auth/refresh` | **纯 accessToken 字符串**（非信封）；读 Cookie `jwt`；旋转 refresh |
-| POST | `/auth/logout` | 清 Cookie + 吊销 refresh |
-| GET | `/auth/codes` | Bearer；权限码数组 |
-| GET | `/user/info` | Bearer；用户摘要 |
-| GET | `/menu/all` | Bearer；最小动态菜单（Dashboard + 角色 demo） |
-
-Seed 账号（Argon2id）：`vben` / `admin` / `jack`，密码均为 `123456`。
+仅开发后端时仍从仓库根锁文件安装，保留 workspace 的依赖构建白名单：
 
 ```bash
-cp .env.example .env
-docker compose up -d
-cd apps/server
-pnpm install --ignore-workspace
-pnpm exec prisma generate
-pnpm exec prisma migrate deploy   # 或 migrate dev
-pnpm exec prisma db seed
-pnpm run build && pnpm run start:prod
-# 默认 http://localhost:5320
+IGNORE_STUB=1 pnpm install --frozen-lockfile --filter @qingzhan/server...
 ```
 
-> 本机若 5432/6379 已被占用，`.env.example` 默认宿主端口为 **55433**（PG）/ **56379**（Redis）。
+前端需要根目录完整安装及 postinstall 生成的内部配置包。若 `@vben/vite-config` 缺少 dist，完成根安装后执行 `pnpm -r run --if-present stub`。另一套 UI 使用 `pnpm dev:antd`，完整管理操作请使用 `pnpm dev:admin`。
 
+## 生产交付
 
-### Audit（Nest-only）
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/system/audit/list` | Bearer + `System:Audit:List`；分页 `items`+`total`；双前缀 `/api` 与 `/api/v1` |
-
-Auth 登录成功/失败/登出与 System 写操作会异步落 `audit_logs`；响应带头 `x-request-id`。
-
-### E2E
+两套前端生产 API 默认均为同源 **`/api`**，由站点反向代理到 Nest；mock 和验证码旁路会被配置检查拒绝。构建时可以使用真实 HTTP(S) API 地址覆盖 `VITE_GLOB_API_URL`。Vite 与运行时配置使用相同 mode 和环境变量优先级，CI 会核对实际生成的配置文件。
 
 ```bash
-cd apps/server && pnpm test:e2e
+pnpm build:admin
+# 发布目录：playground/dist
+# 若需同时核对两套前端产物：
+pnpm --filter @vben/web-antd build
+pnpm check:delivery:artifacts
 ```
 
-需 Compose + `.env` + seed；详见 `apps/server/README.md`。Node engines：`^22.18 || ^24.12`（需支持 `--experimental-vm-modules`）。
+生产后端必须先迁移。空库通过安全 bootstrap 创建强密码管理员，同时创建管理页面路由；已有库通过指定管理员的独立命令补齐入口，权限与现有菜单冲突会拒绝并回滚。命令和 Nginx 示例见[生产验收指南](docs/qingzhan/production-acceptance.md)与[部署文档](docs/qingzhan/deploy.md)。生产不要运行 demo seed。
 
-### 限流
+## 认证与一致性
 
-`@nestjs/throttler`：全局默认 120 次/60s；`POST /auth/login` 更严（默认 10 次/60s）→ 429。存储默认 Redis（`THROTTLE_STORAGE`，见 `apps/server/.env.example`）。Health 跳过限流。
+- Access JWT 使用 Bearer；refresh 通过 HttpOnly Cookie `jwt` 传递，数据库保存哈希并原子旋转。登录/刷新/退出校验受信来源。
+- 权限从有效用户、角色和菜单真源数据库读取；按钮不作为页面路由返回。授权页面必须包含祖先。
+- 用户/角色/菜单 PUT 使用编辑 `version`，冲突返回 409；关键成功写入与审计在同一事务内提交。
+- 多标签页串行续期；账号切换时拒绝旧请求和排队重放。显式退出撤销失败时保留本地状态，提示重试。
+- readiness 对 PG/Redis 探测使用单飞和短缓存，并单独限流 30 次/IP/分钟；liveness 不探测依赖。
 
-## 前端联调（web-antd ↔ Nest）
+接口以[API 合同](规则/api-contract-vben.md)为准。当前 OpenAPI 请求/响应 schema 尚不完整，不应直接视为可靠的 SDK 生成源。
 
-官方联调路径只改 **web-antd**（其它 `web-*` 同理：关 Nitro mock + `accessMode: 'backend'` + proxy 指向 Nest）。
-
-### 配置（已落库）
-
-| 项 | 值 |
-|----|-----|
-| `apps/web-antd/.env.development` → `VITE_NITRO_MOCK` | `false`（关 Nitro / backend-mock） |
-| 同上 → `VITE_GLOB_API_URL` | `/api`（经 vite proxy） |
-| `apps/web-antd/vite.config.ts` proxy | `/api` → `http://localhost:5320/api` |
-| `apps/web-antd/src/preferences.ts` | `app.accessMode: 'backend'`、`app.enableRefreshToken: true` |
-
-> **改 preferences 后务必清浏览器站点数据 / localStorage**（Vben 会持久化偏好，否则仍可能是 `frontend`）。
-
-### 启动（干净机器）
-
-**web-antd 联调必须走根目录完整安装**（仅 `apps/server` 的 `--ignore-workspace` fallback 不够——前端依赖 `@vben/vite-config` 等 workspace 包，且 `postinstall` 会 `stub` 出 `internal/vite-config/dist`）。
+## 质量检查与验收状态
 
 ```bash
-# 终端 1：基础设施 + Nest（若尚未在跑）
-cp .env.example .env          # 首次
-docker compose up -d
-pnpm --filter @qingzhan/server start:dev
-# Nest: http://localhost:5320
-
-# 终端 2：前端（仓库根）
-pnpm install                  # 须跑完 postinstall stub（约数分钟）
-# 若仍报 Cannot find module '@vben/vite-config' / 缺 dist：
-#   pnpm -r run --if-present stub
-pnpm dev:antd                 # → http://localhost:5666
+pnpm check:delivery:types
+pnpm check:delivery:lint
+pnpm test:delivery
+# 后端单元/E2E：使用隔离环境，见 apps/server/README.md
 ```
 
-**排障：** `apps/web-antd` 无 `node_modules`、或 `internal/vite-config/dist/index.mjs` 不存在 → 根目录重跑 `pnpm install`（勿只装 server）。Node `^22.18 || ^24.12`，包管理器 **pnpm**（见根 `packageManager`）。
+本仓库 CI 包括后端单元/真实 PG/Redis E2E/生产镜像烟测，以及新增的前端类型、回归、生产构建、配置产物检查和双 UI 浏览器联调。浏览器脚本使用 Vite 源模块，生产构建另行检查；浏览器联调不等于生产压缩包已完成浏览器验收。
 
-Demo 账号（密码均为 `123456`）：`vben`（super）/ `admin` / `jack`（user）。
+新增 CI 与新安全回归尚需实际执行。当前适合作为**待验收的企业二开底座**；是否投产应依据对应提交的 CI、目标环境联调、容量与备份恢复结果，不能仅凭“能构建”或历史测试数量判断。执行入口与通过标准见[生产验收指南](docs/qingzhan/production-acceptance.md)。
 
-Swagger：`http://localhost:5320/api/docs`。合同验收清单：`规则/api-contract-vben.md` §11。
+## 能力边界
 
-上游 Vben 文档见 `README.vben.md` / `README.zh-CN.md`。
+当前没有全链路多租户/行级数据隔离、私有文件 ACL/签名下载/总配额、完整 SSO/MFA。验证码是一次性公开票据，不能替代服务端人机验证。SMTP、审计归档 worker 与 OTel 导出仍含明确标注的骨架实现。部门/字典及 DELETE 尚未全面使用编辑前置条件。高频写入、多实例容量、真实云存储及生产 RPO/RTO 需按业务验收。
 
+## 文档
+
+- [文档索引](docs/qingzhan/README.md)、[架构](docs/qingzhan/architecture.md)、[贡献](docs/qingzhan/contributing.md)
+- [后端开发与回归](apps/server/README.md)、[部署](docs/qingzhan/deploy.md)、[备份迁移](docs/qingzhan/backup-migrate.md)、[可观测性](docs/qingzhan/observability.md)
+- [技术方案](规则/vben-nestjs-backend-tech-plan.md)、[API 合同](规则/api-contract-vben.md)、[变更记录](CHANGELOG.qingzhan.md)
+- [本轮交付记录](docs/qingzhan/production-delivery-phase13-2026-11-07.md)、[第十二轮安全修复](docs/qingzhan/production-hardening-phase12-2026-11-07.md)
+- [产品文档站](docs-site/)：`pnpm docs:dev` / `pnpm docs:build`

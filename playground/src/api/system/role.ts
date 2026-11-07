@@ -4,6 +4,7 @@ import { requestClient } from '#/api/request';
 
 export namespace SystemRoleApi {
   export interface SystemRole {
+    version: number;
     [key: string]: any;
     id: string;
     name: string;
@@ -27,8 +28,10 @@ async function getRoleList(params: Recordable<any>) {
  * 创建角色
  * @param data 角色数据
  */
-async function createRole(data: Omit<SystemRoleApi.SystemRole, 'id'>) {
-  return requestClient.post('/system/role', data);
+async function createRole(
+  data: Omit<SystemRoleApi.SystemRole, 'id' | 'version'>,
+) {
+  return requestClient.post<SystemRoleApi.SystemRole>('/system/role', data);
 }
 
 /**
@@ -39,9 +42,14 @@ async function createRole(data: Omit<SystemRoleApi.SystemRole, 'id'>) {
  */
 async function updateRole(
   id: string,
-  data: Omit<SystemRoleApi.SystemRole, 'id'>,
+  data: Partial<Omit<SystemRoleApi.SystemRole, 'id' | 'version'>> & {
+    version: number;
+  },
 ) {
-  return requestClient.put(`/system/role/${id}`, data);
+  return requestClient.put<SystemRoleApi.SystemRole>(
+    `/system/role/${id}`,
+    data,
+  );
 }
 
 /**

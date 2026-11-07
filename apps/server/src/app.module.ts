@@ -8,6 +8,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storage';
+import { LOGIN_THROTTLE } from './common/throttler/login-throttle';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
 import { MenuModule } from './modules/menu/menu.module';
@@ -33,8 +34,8 @@ import { ObservabilityModule } from './observability/observability.module';
     RedisModule,
     ObservabilityModule,
     ThrottlerModule.forRootAsync({
-      inject: [ConfigService, RedisService],
-      useFactory: (config: ConfigService, redis: RedisService) => {
+      inject: [ConfigService, RedisService, Reflector],
+      useFactory: (config: ConfigService, redis: RedisService, reflector: Reflector) => {
         const ttl = config.get<number>('THROTTLE_TTL_MS') ?? 60_000;
         const limit = config.get<number>('THROTTLE_LIMIT') ?? 120;
         const loginTtl = config.get<number>('THROTTLE_LOGIN_TTL_MS') ?? 60_000;
@@ -55,17 +56,7 @@ import { ObservabilityModule } from './observability/observability.module';
               name: 'login',
               ttl: loginTtl,
               limit: loginLimit,
-              skipIf: (ctx) => {
-                const req = ctx.switchToHttp().getRequest<{
-                  method?: string;
-                  originalUrl?: string;
-                  url?: string;
-                  path?: string;
-                }>();
-                if (req.method !== 'POST') return true;
-                const raw = String(req.originalUrl ?? req.url ?? req.path ?? '').split('?')[0];
-                return !/\/auth\/login\/?$/.test(raw);
-              },
+              skipIf: (ctx) => reflector.get<boolean>(LOGIN_THROTTLE, ctx.getHandler()) !== true,
             },
           ],
         };
