@@ -76,6 +76,9 @@ let cleanupToken;
 try {
   const [a, b] = await Promise.all([context.newPage(), context.newPage()]);
   for (const page of [a, b]) {
+    page.on('pageerror', (error) => {
+      console.error(`[${app}] Browser error: ${error.name}: ${error.message}`);
+    });
     await page.goto(`${frontend}/auth/login`);
     await page.locator('input[name="username"]').waitFor();
   }
@@ -120,16 +123,45 @@ try {
       ['/system/dict/data/user_gender', '/system/dict/data/list'],
       ['/system/user', '/system/user/list'],
     ]) {
+      console.log(
+        JSON.stringify({
+          app,
+          managementPage: path,
+          expectedEndpoint: endpoint,
+        }),
+      );
       const response = a.waitForResponse(
         (item) =>
           new URL(item.url()).pathname === `/api${endpoint}` &&
           item.request().method() === 'GET',
       );
-      await a.evaluate(async (path) => {
-        const { router } = await import('/src/router/index.ts');
-        await router.push(path);
-      }, path);
-      const result = await response;
+      let result;
+      try {
+        [, result] = await Promise.all([
+          a.evaluate(async (path) => {
+            const { router } = await import('/src/router/index.ts');
+            await router.push(path);
+          }, path),
+          response,
+        ]);
+      } catch (error) {
+        const route = await a.evaluate(async () => {
+          const { router } = await import('/src/router/index.ts');
+          const current = router.currentRoute.value;
+          return {
+            path: current.path,
+            name: current.name,
+            matched: current.matched.map((item) => ({
+              name: item.name,
+              hasComponent: Boolean(item.components?.default),
+            })),
+          };
+        });
+        console.error(
+          JSON.stringify({ app, failedManagementPage: path, route }),
+        );
+        throw error;
+      }
       assert.equal(result.status(), 200, `Management page ${path}`);
       const payload = await result.json();
       assert.equal(payload.code, 0);
