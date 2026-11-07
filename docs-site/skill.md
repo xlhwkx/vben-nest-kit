@@ -11,7 +11,7 @@
 
 1. 通读合同 + 技术方案（冲突以合同为准）。
 2. 扫 `docs/qingzhan/architecture.md`；运维再看 deploy / backup / observability。
-3. 落点：`apps/server`（Nest）、联调 `apps/web-antd`；勿改无关 app。
+3. 落点：`apps/server`（Nest）、联调 `apps/admin`；勿改无关 app。
 4. 定小切片与验收点（路径 / 信封 / refresh 例外 / 无 password）。
 5. 本地：`docker compose up -d` → Nest `:5320` → 可选 `pnpm dev:antd` `:5666` → health。
 6. 提审材料含 **skill 路径**、改动文件、合同对照、探活/测试。

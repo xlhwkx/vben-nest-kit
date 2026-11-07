@@ -60,7 +60,7 @@ pnpm test:e2e
 
 已配置 `VITE_NITRO_MOCK=false`、`accessMode: 'backend'`、proxy → Nest。改 preferences 后清 localStorage。
 
-完整管理页面使用 `pnpm dev:admin`（playground，http://localhost:5555）；web-antd 示例使用 `pnpm dev:antd`（http://localhost:5666）。干净机器须根目录 `pnpm install --frozen-lockfile`（含 postinstall stub）。若 `@vben/vite-config` 解析失败，完成安装后执行 `pnpm -r run --if-present stub`。根 README 提供从配置、迁移到 seed 的主路径；质量命令与运行验收见[生产验收指南](./production-acceptance.md)。
+唯一管理前端为 `apps/admin`，使用 `pnpm dev`（http://localhost:5555）；后端使用 `pnpm dev:server`。干净机器从根目录 `pnpm install --frozen-lockfile`（含 postinstall stub）。质量与运行验收见[生产验收指南](./production-acceptance.md)。
 
 ## 安全与卫生
 

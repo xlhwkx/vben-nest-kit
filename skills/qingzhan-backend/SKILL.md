@@ -1,6 +1,6 @@
 ---
 name: qingzhan-backend
-description: 在扩展或二开青栈（vben-nest-kit）Nest 后端、新增域模块/API、联调 web-antd、对照合同做切片验收、部署/备份/开源清单 B 项时使用。智能体二开青栈专用 skill。
+description: 在扩展或二开青栈（vben-nest-kit）Nest 后端、新增域模块/API、联调 admin、对照合同做切片验收、部署/备份/开源清单 B 项时使用。智能体二开青栈专用 skill。
 ---
 
 # 青栈二开（智能体专用）
@@ -14,7 +14,7 @@ description: 在扩展或二开青栈（vben-nest-kit）Nest 后端、新增域�
 
 1. 打开并通读（或检索相关章）`规则/api-contract-vben.md` + `规则/vben-nestjs-backend-tech-plan.md`；冲突以合同为准。
 2. 扫一眼 `docs/qingzhan/architecture.md` 确认模块地图与本地端口；运维类再打开 `docs/qingzhan/deploy.md` / `backup-migrate.md` / `observability.md`。
-3. 确认落点：`apps/server`（Nest）、联调 `apps/web-antd`、对账 `apps/backend-mock`；不要改无关 app。
+3. 确认落点：`apps/server`（Nest）、联调 `apps/admin`；不要改无关 app。
 4. 定**小切片**范围（一组接口或一个域模块）与验收点（路径/信封/`refresh` 例外/无 password）。
 5. 本地能跑则：`docker compose up -d` → Nest `:5320` → 必要时 `pnpm dev:antd` `:5666` → `GET /api/health/live|ready`。
 6. 实现后跑本切片测试；维护方有审查门禁则提审，材料含：**本 skill 路径**、改动文件、合同对照结论、探活/测试结果。
@@ -40,14 +40,14 @@ description: 在扩展或二开青栈（vben-nest-kit）Nest 后端、新增域�
 ## 2. 代码落点
 
 - Nest 域模块：`apps/server`（Controller → Service → Prisma；仿 Auth/User/Menu/System/Upload/Health/Audit）。
-- 前端联调：`apps/web-antd`（`VITE_NITRO_MOCK=false`，代理 `/api` → Nest `:5320`）。
-- Mock 对账：`apps/backend-mock` + `docs/qingzhan/mock-field-parity.md`（对齐行为，不抄缺陷）。
+- 前端联调：`apps/admin`（`VITE_NITRO_MOCK=false`，代理 `/api` → Nest `:5320`）。
+- API 对账：以 `规则/api-contract-vben.md` 和后端实际实现为准；旧 mock 对照报告仅为历史参考。
 - 运维文档：`docs/qingzhan/`。
 - 产品文档站：`docs-site/`（VitePress；`pnpm docs:dev`；Pages 须 Public 后启用，非开源硬门槛）。
 
 ## 3. 本地验证
 
-默认宿主口（`.env.example` / contributing）：Postgres **55433**、Redis **56379**、Nest **5320**、web-antd **5666**。
+默认宿主口（`.env.example` / contributing）：Postgres **55433**、Redis **56379**、Nest **5320**、admin **5555**。
 
 1. 根目录 `pnpm install`（含 stub）；`docker compose up -d`。
 2. 起 Nest + 可选 `pnpm dev:antd`。

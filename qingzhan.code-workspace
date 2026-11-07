@@ -1,0 +1,16 @@
+{
+  "folders": [
+    {
+      "name": "Qingzhan",
+      "path": "."
+    },
+    {
+      "name": "Admin",
+      "path": "apps/admin"
+    },
+    {
+      "name": "Server",
+      "path": "apps/server"
+    }
+  ]
+}

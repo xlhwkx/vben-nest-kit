@@ -6,7 +6,7 @@
 
 | Layer | Choice |
 | --- | --- |
-| Frontend | playground contains the management pages; web-antd is a UI integration example. Both use `accessMode: backend`, `VITE_NITRO_MOCK=false` |
+| Frontend | `apps/admin`: the only supported admin (Vue 3 + antdv-next), using backend permissions and the real API |
 | Backend | NestJS 12 + Express (`apps/server` / `@qingzhan/server`) |
 | ORM / DB | Prisma 7 + PostgreSQL |
 | Cache / throttle store | Redis 7 (`ioredis`) |
@@ -31,7 +31,7 @@ Auth · User · Menu · System (user/role/menu/dept/dict) · Upload · Health ·
 ## Local ports
 
 - Nest: `5320`
-- playground management frontend: `5555` (Vite proxy → Nest); web-antd example: `5666`
+- Admin frontend: `5555` (`apps/admin`, Vite proxy → Nest)
 - Compose Postgres / Redis: see `apps/server/.env.example`
 
 ## Cross-cutting (shipped highlights)
@@ -43,7 +43,7 @@ Auth · User · Menu · System (user/role/menu/dept/dict) · Upload · Health ·
 - **Audit**: async `record` for login success/failure/lock, logout, sensitive writes, upload; list requires `System:Audit:List`; `x-request-id` header.
 - **Upload**: local disk + UUID; MIME allow-list + **magic-bytes** (`file-type`); no SVG by default; `nosniff`; multer limit aligns with `UPLOAD_MAX_BYTES`.
 - **Queue**: optional BullMQ skeleton (`QUEUE_ENABLED` default false); `MAIL_DRIVER=console|smtp` (console default, smtp dry-run). Runtime type `MailProvider` aliases tech-plan §26 `MailSender`.
-- **Captcha tickets**: web-antd keeps **SliderCaptcha**. The API defaults to no ticket requirement; `CAPTCHA_REQUIRED=true` requires the ticket from `GET /api/auth/captcha`. Redis GETDEL permits one consumption; storage errors return 503. This public ticket does not verify a human action and is not server-side bot protection. `VITE_CAPTCHA_REQUIRED=true` fetches the ticket before login. Server CAPTCHA bypass is test-only and forbidden in production; Qingzhan Vite configs reject frontend bypass in every mode.
+- **Captcha tickets**: with `CAPTCHA_REQUIRED=true`, set `VITE_CAPTCHA_REQUIRED=true` in the admin to fetch a single-use public ticket before login. These tickets do not verify a human action. Production bypass is forbidden.
 
 ## Explicitly not done
 

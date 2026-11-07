@@ -1,5 +1,5 @@
 name: 🐞 Bug Report
-description: Report an issue with Vben Admin to help us make it better.
+description: Report an issue with Qingzhan to help us make it better.
 title: 'Bug: '
 labels: ['bug: pending triage']
 
@@ -14,8 +14,8 @@ body:
       label: Version
       description: What version of our software are you running?
       options:
-        - Vben Admin V5
-        - Vben Admin V2
+        - Qingzhan main
+        - Qingzhan release
       default: 0
     validations:
       required: true
@@ -66,9 +66,9 @@ body:
           required: true
         - label: Ensure the code is up to date. (Some issues have been fixed in the latest version)
           required: true
-        - label: I have searched the [existing issues](https://github.com/vbenjs/vue-vben-admin/issues) and checked that my issue does not duplicate any existing issues.
+        - label: I have searched the [existing issues](https://github.com/xlhwkx/vben-nest-kit/issues) and checked that my issue does not duplicate any existing issues.
           required: true
-        - label: Check that this is a concrete bug. For Q&A open a [GitHub Discussion](https://github.com/vbenjs/vue-vben-admin/discussions) or join our [Discord Chat Server](https://discord.gg/8GuAdwDhj6).
+        - label: Check that this is a concrete bug. Include the failing command, expected behavior, and sanitized reproduction steps.
           required: true
         - label: The provided reproduction is a [minimal reproducible example](https://stackoverflow.com/help/minimal-reproducible-example) of the bug.
           required: true
