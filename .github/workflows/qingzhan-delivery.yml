@@ -56,6 +56,8 @@ jobs:
       - run: pnpm check:delivery:artifacts
       - name: Build management delivery image
         run: docker build -f scripts/deploy/Dockerfile -t qingzhan-admin:ci .
+      - name: Validate rendered management proxy configuration
+        run: docker run --rm -e QINGZHAN_API_ORIGIN=http://127.0.0.1:5320 qingzhan-admin:ci nginx -t
 
   browser:
     name: Browser integration (admin)
