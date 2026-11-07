@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Show intended tag and notes
         run: |
@@ -46,7 +46,7 @@ jobs:
   #   permissions:
   #     contents: write
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v7
   #     - name: Create GitHub Release (ONLY after user OK)
   #       if: ${{ inputs.confirm_publish == true }}
   #       env:
