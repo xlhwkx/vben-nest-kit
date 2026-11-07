@@ -22,6 +22,9 @@ jobs:
     env:
       CI: 'true'
       NODE_OPTIONS: --max-old-space-size=8192
+      # Prisma's install-time config requires a URL; generation does not connect.
+      # Runtime/database tests use the separate browser job's disposable database.
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/qingzhan_typecheck?schema=public
       VITE_GLOB_API_URL: /api
       VITE_NITRO_MOCK: 'false'
       VITE_CAPTCHA_E2E_BYPASS: 'false'
