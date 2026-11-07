@@ -37,6 +37,9 @@ setupVbenVxeTable({
           enabled: false,
         },
         minHeight: 180,
+        pagerConfig: {
+          pageSizes: [10, 20, 30, 50, 100],
+        },
         proxyConfig: {
           autoLoad: true,
           response: {

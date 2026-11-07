@@ -18,10 +18,22 @@ export namespace SystemRoleApi {
  * 获取角色列表数据
  */
 async function getRoleList(params: Recordable<any>) {
-  return requestClient.get<Array<SystemRoleApi.SystemRole>>(
-    '/system/role/list',
-    { params },
-  );
+  return requestClient.get<{
+    items: SystemRoleApi.SystemRole[];
+    total: number;
+  }>('/system/role/list', { params });
+}
+
+/** Load role choices within the API's 100-row page limit. */
+async function getRoleOptions() {
+  const roles: SystemRoleApi.SystemRole[] = [];
+  for (let page = 1; ; page++) {
+    const { items, total } = await getRoleList({ page, pageSize: 100 });
+    roles.push(...items);
+    if (roles.length >= total) return roles;
+    if (items.length === 0)
+      throw new Error('Role options response is incomplete');
+  }
 }
 
 /**
@@ -60,4 +72,4 @@ async function deleteRole(id: string) {
   return requestClient.delete(`/system/role/${id}`);
 }
 
-export { createRole, deleteRole, getRoleList, updateRole };
+export { createRole, deleteRole, getRoleList, getRoleOptions, updateRole };

@@ -11,7 +11,7 @@ import { useDictStore } from '@vben/stores';
 import { Tag } from 'antdv-next';
 
 import { z } from '#/adapter/form';
-import { getDeptList, getRoleList } from '#/api';
+import { getDeptList, getRoleOptions } from '#/api';
 import { $t } from '#/locales';
 
 const USER_GENDER_CODE = 'user_gender';
@@ -20,18 +20,20 @@ const USER_GENDER_CODE = 'user_gender';
 let roleLabelById = new Map<string, string>();
 
 /**
- * Prefetch role labels via getRoleList (Nest returns { items, total }).
+ * Prefetch role labels using bounded API pages.
  * Safe to call repeatedly; refreshes the cache.
  */
 export async function ensureRoleLabelCache(): Promise<void> {
-  const res = await getRoleList({ page: 1, pageSize: 500 });
-  const items = Array.isArray(res)
-    ? res
-    : ((res as { items?: Array<{ code?: string; id: string; name: string }> })
-        ?.items ?? []);
-  roleLabelById = new Map(
-    items.map((r) => [r.id, r.code ? `${r.name} (${r.code})` : r.name]),
-  );
+  // Labels are optional enrichment: a user-list reader may lack role-list permission.
+  roleLabelById = new Map();
+  try {
+    const items = await getRoleOptions();
+    roleLabelById = new Map(
+      items.map((r) => [r.id, r.code ? `${r.name} (${r.code})` : r.name]),
+    );
+  } catch (error) {
+    console.error('Failed to load role labels:', error);
+  }
 }
 
 /** Map role ids to display labels; unknown ids fall back to raw id. */
@@ -92,11 +94,10 @@ export function useFormSchema(isEdit = false): VbenFormSchema[] {
       component: 'ApiSelect',
       componentProps: {
         allowClear: true,
-        api: () => getRoleList({ page: 1, pageSize: 200 }),
+        api: getRoleOptions,
         class: 'w-full',
         labelField: 'name',
         mode: 'multiple',
-        resultField: 'items',
         valueField: 'id',
       },
       fieldName: 'roles',

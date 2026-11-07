@@ -115,6 +115,16 @@ try {
 
   // Verify the supported management pages actually invoke the real API.
   if (app === 'playground') {
+    const failedRoleReads = [];
+    a.on('response', (response) => {
+      if (
+        new URL(response.url()).pathname === '/api/system/role/list' &&
+        response.request().method() === 'GET' &&
+        response.status() !== 200
+      ) {
+        failedRoleReads.push(response.status());
+      }
+    });
     for (const [path, endpoint] of [
       ['/system/role', '/system/role/list'],
       ['/system/menu', '/system/menu/list'],
@@ -174,6 +184,43 @@ try {
       );
       // Data must reach rendered content; missing components can still have a valid route.
       await a.locator('main').waitFor();
+    }
+    assert.deepEqual(failedRoleReads, [], 'Role label reads must succeed');
+
+    // More than one API page must remain selectable without an oversized request.
+    const rolePages = [];
+    const roleOptions = Array.from({ length: 101 }, (_, index) => ({
+      id: `role-option-${index}`,
+      name: `Role ${index}`,
+    }));
+    const roleListUrl = `${api}/system/role/list?*`;
+    await a.route(roleListUrl, async (route) => {
+      const query = new URL(route.request().url()).searchParams;
+      assert.equal(query.get('pageSize'), '100');
+      const page = Number(query.get('page'));
+      rolePages.push(page);
+      await route.fulfill({
+        status: 200,
+        headers: cors,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          code: 0,
+          data: {
+            items: roleOptions.slice((page - 1) * 100, page * 100),
+            total: roleOptions.length,
+          },
+        }),
+      });
+    });
+    try {
+      const options = await a.evaluate(async () => {
+        const { getRoleOptions } = await import('/src/api/system/role.ts');
+        return getRoleOptions();
+      });
+      assert.deepEqual(options, roleOptions);
+      assert.deepEqual(rolePages, [1, 2]);
+    } finally {
+      await a.unroute(roleListUrl);
     }
   }
 

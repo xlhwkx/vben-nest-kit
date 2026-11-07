@@ -197,7 +197,6 @@ function searchDept(value: string) {
 
 onMounted(() => {
   void loadDeptList();
-  void ensureRoleLabelCache();
 });
 
 watch(inputSearchValue, (value) => {
