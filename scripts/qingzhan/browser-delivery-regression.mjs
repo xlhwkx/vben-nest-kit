@@ -230,7 +230,7 @@ try {
       .filter({ hasText: department.sibling.name });
     await departmentSearch.fill(department.child.name);
     await childNode.waitFor();
-    assert.equal(await siblingNode.count(), 0);
+    await siblingNode.waitFor({ state: 'detached' });
     await departmentSearch.fill(department.sibling.name);
     await siblingNode.waitFor();
     await departmentSearch.fill('');
