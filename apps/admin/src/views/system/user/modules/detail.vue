@@ -16,8 +16,8 @@ const items = computed(() => useDescriptionItems(detailData.value));
 const [Drawer, drawerApi] = useVbenDrawer<SystemUserApi.SystemUser>({
   async onOpenChange(isOpen) {
     if (isOpen) {
-      await ensureRoleLabelCache();
       detailData.value = drawerApi.getData();
+      await ensureRoleLabelCache();
     }
   },
 });

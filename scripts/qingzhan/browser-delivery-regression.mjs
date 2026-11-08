@@ -214,6 +214,46 @@ try {
       );
       // Data must reach rendered content; missing components can still have a valid route.
       await a.locator('main').waitFor();
+      if (path === '/system/dept') {
+        // Resetting an add-child draft must keep its initially selected parent.
+        await a
+          .getByRole('button', { name: '新增下级', exact: true })
+          .last()
+          .click();
+        const dialog = a.getByRole('dialog');
+        const names = (nodes) =>
+          nodes.flatMap((node) => [node.name, ...names(node.children ?? [])]);
+        const departmentNames = names(payload.data);
+        await a.waitForFunction(
+          (names) =>
+            names.some((name) =>
+              document
+                .querySelector('[role="dialog"]')
+                ?.textContent?.includes(name),
+            ),
+          departmentNames,
+        );
+        let selectedParent;
+        for (const name of departmentNames) {
+          if (await dialog.getByText(name, { exact: true }).count()) {
+            selectedParent = name;
+            break;
+          }
+        }
+        assert.ok(selectedParent, 'Add-child form must display its parent');
+        const nameInput = dialog.locator('input[name="name"]');
+        await nameInput.fill('Reset draft');
+        await dialog.getByRole('button', { name: '重置', exact: true }).click();
+        await a.waitForFunction(() => {
+          const input = document.querySelector(
+            '[role="dialog"] input[name="name"]',
+          );
+          return input && input.value === '';
+        });
+        await dialog.getByText(selectedParent, { exact: true }).waitFor();
+        await dialog.getByRole('button', { name: /^(取消|Cancel)$/u }).click();
+        await dialog.waitFor({ state: 'hidden' });
+      }
     }
     assert.deepEqual(failedRoleReads, [], 'Role label reads must succeed');
 
@@ -283,6 +323,62 @@ try {
     await childNode.click();
     const allUsersResponse = await allUsers;
     assert.equal(allUsersResponse.status(), 200);
+
+    // Optional role-label enrichment must not block the selected user's details.
+    const allUsersPayload = await allUsersResponse.json();
+    const firstUser = allUsersPayload.data.items.find(
+      (user) => user.roles.length > 0,
+    );
+    assert.ok(
+      firstUser,
+      'User detail regression requires a seeded user with roles',
+    );
+    const roleLookupArrived = gate();
+    const releaseRoleLookup = gate();
+    const roleLookupUrl = `${api}/system/role/list?*`;
+    await a.route(roleLookupUrl, async (route) => {
+      roleLookupArrived.resolve();
+      await bounded(releaseRoleLookup.promise);
+      await route.continue();
+    });
+    const userRow = a.locator(`.vxe-body--row[rowid="${firstUser.id}"]`);
+    try {
+      await userRow
+        .getByRole('button', { name: '详情', exact: true })
+        .last()
+        .click();
+      await bounded(roleLookupArrived.promise);
+      const dialog = a.getByRole('dialog');
+      await dialog.getByText(firstUser.id, { exact: true }).waitFor();
+      const roleLookupResponse = a.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === '/api/system/role/list',
+      );
+      releaseRoleLookup.resolve();
+      const roleResponse = await roleLookupResponse;
+      assert.equal(roleResponse.status(), 200);
+      const rolePayload = await roleResponse.json();
+      const displayedRole = rolePayload.data.items.find((role) =>
+        firstUser.roles.includes(role.id),
+      );
+      assert.ok(
+        displayedRole,
+        'Seeded user role must be available for display',
+      );
+      await dialog
+        .getByText(
+          displayedRole.code
+            ? `${displayedRole.name} (${displayedRole.code})`
+            : displayedRole.name,
+          { exact: false },
+        )
+        .waitFor();
+      await dialog.locator('button:has(.lucide-x)').click();
+      await dialog.waitFor({ state: 'hidden' });
+    } finally {
+      releaseRoleLookup.resolve();
+      await a.unroute(roleLookupUrl);
+    }
 
     // A half-selected ancestor must select all children when clicked, including after a model update.
     await a.evaluate(async () => {
