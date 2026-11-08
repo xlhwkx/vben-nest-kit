@@ -86,7 +86,7 @@ function toAdminNode(row: MenuRow): SystemMenuNode {
     path: row.path,
     type: row.type,
     status: row.status,
-    meta: metaOf(row.meta),
+    meta: { ...metaOf(row.meta), order: row.sortOrder },
   };
   if (row.parentId) node.pid = row.parentId;
   if (row.authCode) node.authCode = row.authCode;
@@ -181,7 +181,7 @@ export class SystemMenuService {
         type: input.type,
         status: input.status === 0 ? 0 : 1,
         authCode: input.authCode?.trim() || null,
-        component: input.component?.trim() || null,
+        component: input.type === 'embedded' ? 'IFrameView' : input.component?.trim() || null,
         redirect: input.redirect?.trim() || null,
         meta: meta as Prisma.InputJsonValue,
         sortOrder,
@@ -254,6 +254,8 @@ export class SystemMenuService {
         : typeof input.meta?.order === 'number'
           ? input.meta.order
           : 0;
+    let component = input.component === undefined ? undefined : input.component?.trim() || null;
+    if (input.type === 'embedded') component = 'IFrameView';
 
     const row = await db.menu.update({
       where: { id },
@@ -264,7 +266,7 @@ export class SystemMenuService {
         type: input.type,
         status: input.status,
         authCode: input.authCode === undefined ? undefined : input.authCode?.trim() || null,
-        component: input.component === undefined ? undefined : input.component?.trim() || null,
+        component,
         redirect: input.redirect === undefined ? undefined : input.redirect?.trim() || null,
         meta: input.meta === undefined ? undefined : (meta as Prisma.InputJsonValue),
         sortOrder,

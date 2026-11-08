@@ -16,6 +16,8 @@ pnpm --filter @qingzhan/server build
 
 Swagger UI（非 production 默认开；生产设 `SWAGGER_ENABLED=true` 强制开）：`http://localhost:5320/api/docs`
 
+生产新库先迁移，再使用 `bootstrap:admin` 创建强密码管理员、管理导航和基础字典。已有库缺字典时，在进程环境提供 `DATABASE_URL` 与管理员用户名 `SYSTEM_DATA_USERNAME`，构建后执行 `pnpm --filter @qingzhan/server provision:dicts`；仅补缺失的 `user_gender`、`common_status`、`yes_no` 类型，已有类型和条目完全保留。不要在生产运行开发 seed。详见[生产验收指南](../../docs/qingzhan/production-acceptance.md)。
+
 ## 与管理前端联调
 
 唯一管理前端位于 `apps/admin`（见仓库根 `README.md`）：

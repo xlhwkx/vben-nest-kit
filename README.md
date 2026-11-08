@@ -72,7 +72,7 @@ pnpm check:delivery:artifacts
 
 只构建一个应用用 `pnpm build:admin` / `pnpm build:server`。前端产物是 `apps/admin/dist`，生产 API 默认同源 `/api`，由 HTTPS 站点反向代理到 Nest。配置检查拒绝上游 mock、mock 开关和验证码旁路。
 
-生产先备份与迁移。新空库使用 `bootstrap:admin` 创建强密码管理员；已有库缺入口时使用 `provision:admin-routes` 为指定管理员补齐导航。禁止生产 demo seed。命令与 Nginx 示例见[生产验收指南](docs/qingzhan/production-acceptance.md)。
+生产先备份与迁移。新空库使用 `bootstrap:admin` 创建强密码管理员、管理导航和三套基础字典（用户性别、通用状态、是否）；已有库缺入口时使用 `provision:admin-routes`，缺基础字典时使用 `provision:dicts`。补齐命令保留已有配置，禁止生产 demo seed。命令与 Nginx 示例见[生产验收指南](docs/qingzhan/production-acceptance.md)。
 
 CI 覆盖后端单元/真实 PG/Redis E2E/生产镜像烟测、前端回归/生产构建/配置产物检查，以及真实 API 的浏览器联调。应核对发布提交的 CI；源码浏览器回归不替代正式 HTTPS 产物、容量和备份恢复验收。
 

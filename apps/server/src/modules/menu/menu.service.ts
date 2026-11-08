@@ -90,9 +90,10 @@ export class MenuService {
       const node: MenuRouteNode = {
         name: row.name,
         path: row.path,
-        meta: safeMenuMeta(row.meta),
+        meta: { ...safeMenuMeta(row.meta), order: row.sortOrder },
       };
-      if (row.component) node.component = row.component;
+      if (row.type === 'embedded') node.component = 'IFrameView';
+      else if (row.component) node.component = row.component;
       if (row.redirect) node.redirect = row.redirect;
       if (kids.length > 0) {
         node.children = kids.map(toNode);

@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { provisionSystemDictionaries } from '../src/common/initialization/system-dictionaries.js';
 import { SYSTEM_PERMISSION_CODES } from '../src/common/authorization/permission-codes.js';
 import { provisionAdminRoutes } from '../src/common/authorization/admin-routes.js';
 import * as argon2 from 'argon2';
@@ -507,86 +508,13 @@ async function main() {
   }
   console.log(`  ok depts: 总公司 + ${childSpecs.length} children`);
 
-  // Minimal dict types + items (aligned with backend-mock)
-  const dictSpecs = [
-    {
-      code: 'user_gender',
-      name: '用户性别',
-      remark: '用户性别字典',
-      items: [
-        { label: '男', value: 1, sort: 1 },
-        { label: '女', value: 0, sort: 2 },
-        { label: '未知', value: 2, sort: 3 },
-      ],
-    },
-    {
-      code: 'common_status',
-      name: '通用状态',
-      remark: '启用/禁用',
-      items: [
-        { label: '启用', value: 1, color: 'success', sort: 1 },
-        { label: '禁用', value: 0, color: 'error', sort: 2 },
-      ],
-    },
-    {
-      code: 'yes_no',
-      name: '是否',
-      remark: '是否选项',
-      items: [
-        { label: '是', value: 1, sort: 1 },
-        { label: '否', value: 0, sort: 2 },
-      ],
-    },
-  ] as const;
-
-  for (const spec of dictSpecs) {
-    const type = await prisma.dictType.upsert({
-      where: { code: spec.code },
-      update: {
-        name: spec.name,
-        remark: spec.remark,
-        status: 1,
-      },
-      create: {
-        code: spec.code,
-        name: spec.name,
-        remark: spec.remark,
-        status: 1,
-      },
-    });
-    for (const item of spec.items) {
-      const existing = await prisma.dictItem.findFirst({
-        where: {
-          dictCode: type.code,
-          label: item.label,
-        },
-      });
-      if (existing) {
-        await prisma.dictItem.update({
-          where: { id: existing.id },
-          data: {
-            value: item.value,
-            sort: item.sort,
-            status: 1,
-            color: 'color' in item ? ((item as { color?: string }).color ?? null) : null,
-            remark: null,
-          },
-        });
-      } else {
-        await prisma.dictItem.create({
-          data: {
-            dictCode: type.code,
-            label: item.label,
-            value: item.value,
-            sort: item.sort,
-            status: 1,
-            color: 'color' in item ? ((item as { color?: string }).color ?? null) : null,
-          },
-        });
-      }
-    }
-  }
-  console.log(`  ok dict types: ${dictSpecs.length}`);
+  // Share production system configuration without resetting existing customization.
+  const dictionaries = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SET LOCAL lock_timeout = '5s'`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(7339202601::bigint)`;
+    return provisionSystemDictionaries(tx);
+  });
+  console.log(`  ok system dictionaries: ${JSON.stringify(dictionaries)}`);
 
   console.log('Development demo seed done. Never use demo credentials in production.');
 }

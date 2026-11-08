@@ -66,6 +66,7 @@
     "activeIcon": "Active Icon",
     "activePath": "Active Path",
     "path": "Route Path",
+    "sort": "Sort Order",
     "component": "Component",
     "status": "Status",
     "authCode": "Auth Code",

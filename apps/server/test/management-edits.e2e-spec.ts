@@ -3,6 +3,10 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import { randomUUID } from 'node:crypto';
 import { ADMIN_ROUTES, provisionAdminRoutes } from '../src/common/authorization/admin-routes';
+import {
+  provisionSystemDictionaries,
+  SYSTEM_DICTIONARIES,
+} from '../src/common/initialization/system-dictionaries';
 import request from 'supertest';
 import type { AuthUser } from '../src/common/decorators/current-user.decorator';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
@@ -67,6 +71,84 @@ describe('menu semantics and management edit revisions (e2e)', () => {
     menus.clear();
   });
   afterAll(async () => app?.close());
+
+  it('initializes system dictionaries without demo data and preserves customized existing types', async () => {
+    const codes = SYSTEM_DICTIONARIES.map((spec) => spec.code);
+    const rollback = new Error('Rollback dictionary fixture');
+    await expect(
+      prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(7339202601::bigint)`;
+        await tx.dictType.deleteMany({ where: { code: { in: codes } } });
+        const usersBefore = await tx.user.count();
+        const result = await provisionSystemDictionaries(tx);
+        expect(result).toEqual({ created: codes, preserved: [] });
+        expect(await tx.dictItem.count({ where: { dictCode: { in: codes } } })).toBe(7);
+        expect(await tx.user.count()).toBe(usersBefore);
+        const snapshot = await tx.dictType.findMany({
+          where: { code: { in: codes } },
+          include: { items: { orderBy: { sort: 'asc' } } },
+          orderBy: { code: 'asc' },
+        });
+        const revision = await tx.dictionaryRevision.findUniqueOrThrow({ where: { id: 1 } });
+        expect(await provisionSystemDictionaries(tx)).toEqual({ created: [], preserved: codes });
+        expect(await tx.dictionaryRevision.findUniqueOrThrow({ where: { id: 1 } })).toEqual(
+          revision,
+        );
+        expect(
+          await tx.dictType.findMany({
+            where: { code: { in: codes } },
+            include: { items: { orderBy: { sort: 'asc' } } },
+            orderBy: { code: 'asc' },
+          }),
+        ).toEqual(snapshot);
+        await tx.dictType.update({
+          where: { code: 'user_gender' },
+          data: { status: 0, name: 'Custom dictionary' },
+        });
+        await tx.dictItem.deleteMany({ where: { dictCode: 'user_gender' } });
+        await tx.dictType.delete({ where: { code: 'yes_no' } });
+        expect(await provisionSystemDictionaries(tx)).toEqual({
+          created: ['yes_no'],
+          preserved: ['user_gender', 'common_status'],
+        });
+        expect(
+          await tx.dictType.findUniqueOrThrow({ where: { code: 'user_gender' } }),
+        ).toMatchObject({
+          name: 'Custom dictionary',
+          status: 0,
+        });
+        expect(await tx.dictItem.count({ where: { dictCode: 'user_gender' } })).toBe(0);
+        throw rollback;
+      }),
+    ).rejects.toBe(rollback);
+  });
+
+  it('returns database sort order in both the management tree and dynamic routes', async () => {
+    const target = await menu({ meta: { title: 'Sorted' } });
+    await prisma.menu.update({ where: { id: target.id }, data: { sortOrder: 83 } });
+    const listed = await app.get(SystemMenuService).list();
+    expect(listed.find((row) => row.id === target.id)?.meta.order).toBe(83);
+    const granted = await role([target.id]);
+    const member = await user([granted.id]);
+    const routes = await app.get(MenuService).getAllForUser(member.id);
+    expect(routes.find((row) => row.name === target.name)?.meta?.order).toBe(83);
+  });
+
+  it('assigns the iframe layout to API-created embedded menus and legacy rows', async () => {
+    const target = await menu({
+      type: 'embedded',
+      meta: { iframeSrc: 'https://example.test/frame', activePath: '/system/dict' },
+    });
+    expect(target.component).toBe('IFrameView');
+    const granted = await role([target.id]);
+    const member = await user([granted.id]);
+    await prisma.menu.update({ where: { id: target.id }, data: { component: null } });
+    const routes = await app.get(MenuService).getAllForUser(member.id);
+    expect(routes.find((row) => row.name === target.name)).toMatchObject({
+      component: 'IFrameView',
+      meta: { iframeSrc: 'https://example.test/frame', activePath: '/system/dict' },
+    });
+  });
 
   it('provisions complete navigation only to the selected role, preserving existing definitions', async () => {
     const selected = await role();
