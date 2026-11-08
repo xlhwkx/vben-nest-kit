@@ -5,20 +5,35 @@ import { requestClient } from '#/api/request';
 export namespace SystemUserApi {
   export interface SystemUser {
     version: number;
-    [key: string]: any;
+    avatar?: string;
     createTime?: string;
     gender?: 0 | 1 | 2;
+    deptId?: string;
+    homePath?: string;
     id: string;
     name: string;
     /** Login account; required on create */
-    username?: string;
+    username: string;
     /**
      * Bound role ids (Nest `roles`).
      * Not menu permissions — those live on SystemRole.permissions.
      */
-    roles?: string[];
+    roles: string[];
     remark?: string;
     status: 0 | 1;
+  }
+
+  export interface UserInput {
+    avatar?: null | string;
+    deptId?: null | string;
+    gender?: 0 | 1 | 2;
+    homePath?: null | string;
+    name: string;
+    password?: string;
+    remark?: null | string;
+    roles?: string[];
+    status: 0 | 1;
+    username: string;
   }
 }
 
@@ -26,10 +41,10 @@ export namespace SystemUserApi {
  * 获取用户列表数据
  */
 async function getUserList(params: Recordable<any>) {
-  return requestClient.get<Array<SystemUserApi.SystemUser>>(
-    '/system/user/list',
-    { params },
-  );
+  return requestClient.get<{
+    items: SystemUserApi.SystemUser[];
+    total: number;
+  }>('/system/user/list', { params });
 }
 
 /**
@@ -37,7 +52,7 @@ async function getUserList(params: Recordable<any>) {
  * @param data 用户数据（Must 含 username + password + name）
  */
 async function createUser(
-  data: Omit<SystemUserApi.SystemUser, 'id' | 'version'> & {
+  data: SystemUserApi.UserInput & {
     password: string;
     username: string;
   },
@@ -53,9 +68,7 @@ async function createUser(
  */
 async function updateUser(
   id: string,
-  data: Partial<Omit<SystemUserApi.SystemUser, 'id' | 'version'>> & {
-    password?: string;
-  } & {
+  data: Partial<SystemUserApi.UserInput> & {
     version: number;
   },
 ) {

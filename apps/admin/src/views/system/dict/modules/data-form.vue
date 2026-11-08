@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import type { DictDataFormValues } from './dict-data-form';
+
 import type { SystemDictApi } from '#/api';
 
 import { computed, ref } from 'vue';
@@ -11,6 +13,10 @@ import { createDictData, updateDictData } from '#/api';
 import { $t } from '#/locales';
 
 import { useDataFormSchema } from '../data';
+import {
+  decodeDictDataFormValues,
+  encodeDictDataFormValues,
+} from './dict-data-form';
 
 const emit = defineEmits<{
   success: [];
@@ -40,11 +46,10 @@ const [Modal, modalApi] = useVbenModal<DictDataModalData>({
       return;
     }
     modalApi.lock();
-    const values = (await formApi.getValues()) as Omit<
-      SystemDictApi.SystemDictData,
-      'createTime' | 'id'
-    >;
     try {
+      const values = encodeDictDataFormValues(
+        await formApi.getValues<DictDataFormValues>(),
+      );
       await (formData.value?.id
         ? updateDictData(formData.value.id, values)
         : createDictData(values));
@@ -58,9 +63,11 @@ const [Modal, modalApi] = useVbenModal<DictDataModalData>({
   onOpenChange(isOpen) {
     if (isOpen) {
       const data = modalApi.getData();
+      formApi.reset();
+      formData.value = undefined;
       if (data) {
         formData.value = 'id' in data ? data : undefined;
-        formApi.setValues(data);
+        formApi.setValues(decodeDictDataFormValues(data));
       }
     }
   },

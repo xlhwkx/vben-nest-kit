@@ -103,7 +103,7 @@ function updateTreeValue() {
       if (props.includeIndeterminate && props.multiple) {
         const excludedKeys = computeIndeterminateKeysInSelection(enabledIds);
         treeValue.value = enabledItems.filter(
-          (item) => !excludedKeys.has(get(item.value, props.valueField)),
+          (item) => !excludedKeys.has(get(item, props.valueField)),
         );
       } else {
         treeValue.value = enabledItems;

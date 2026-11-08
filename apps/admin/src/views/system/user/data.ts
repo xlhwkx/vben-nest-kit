@@ -42,7 +42,10 @@ export function formatRoleLabels(roleIds?: string[]): string {
   return roleIds.map((id) => roleLabelById.get(id) ?? id).join(', ');
 }
 
-export function useFormSchema(isEdit = false): VbenFormSchema[] {
+export function useFormSchema(
+  isEdit = false,
+  canAssignRoles = false,
+): VbenFormSchema[] {
   const dictStore = useDictStore();
   return [
     {
@@ -88,7 +91,6 @@ export function useFormSchema(isEdit = false): VbenFormSchema[] {
       },
       fieldName: 'deptId',
       label: $t('system.user.dept'),
-      rules: 'required',
     },
     {
       component: 'ApiSelect',
@@ -102,6 +104,10 @@ export function useFormSchema(isEdit = false): VbenFormSchema[] {
       },
       fieldName: 'roles',
       label: $t('system.user.roles'),
+      dependencies: {
+        resolve: () => ({ if: canAssignRoles }),
+        triggerFields: [],
+      },
     },
 
     {
@@ -200,7 +206,9 @@ export function useDescriptionItems(
     },
     {
       label: $t('system.user.gender'),
-      content: dictStore.getDictLabel(USER_GENDER_CODE, row?.gender),
+      content: String(
+        dictStore.getDictLabel(USER_GENDER_CODE, row?.gender) ?? '',
+      ),
     },
     {
       label: $t('system.user.status'),

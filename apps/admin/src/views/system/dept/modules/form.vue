@@ -12,6 +12,7 @@ import { createDept, updateDept } from '#/api';
 import { $t } from '#/locales';
 
 import { useSchema } from '../data';
+import { encodeDeptFormValues } from './dept-form';
 
 const emit = defineEmits(['success']);
 const formData = ref<SystemDeptApi.SystemDept>();
@@ -34,7 +35,10 @@ const [Form, formApi] = useVbenForm({
 
 function resetForm() {
   formApi.reset();
-  formApi.setValues(formData.value || {});
+  formApi.setValues({
+    ...formData.value,
+    pid: formData.value?.pid || undefined,
+  });
 }
 
 const [Modal, modalApi] = useVbenModal<DeptModalData>({
@@ -42,7 +46,9 @@ const [Modal, modalApi] = useVbenModal<DeptModalData>({
     const { valid } = await formApi.validate();
     if (valid) {
       modalApi.lock();
-      const data = await formApi.getValues();
+      const data = encodeDeptFormValues(
+        await formApi.getValues<SystemDeptApi.DeptInput>(),
+      );
       try {
         await (formData.value?.id
           ? updateDept(formData.value.id, data)

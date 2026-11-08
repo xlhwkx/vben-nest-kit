@@ -206,6 +206,81 @@ try {
     }
     assert.deepEqual(failedRoleReads, [], 'Role label reads must succeed');
 
+    // The department tree must keep nested matches and send a UUID, then allow clearing.
+    const department = await a.evaluate(async () => {
+      const { getDeptList } = await import('/src/api/system/dept.ts');
+      const departments = await getDeptList();
+      const parent = departments.find((item) => item.children?.length >= 2);
+      if (!parent)
+        throw new Error(
+          'Department regression requires a seeded parent with two children',
+        );
+      return {
+        parent: parent.name,
+        child: parent.children[0],
+        sibling: parent.children[1],
+      };
+    });
+    const departmentSearch = a.getByPlaceholder(/搜索部门|Search Department/u);
+    const childNode = a
+      .getByRole('treeitem')
+      .filter({ hasText: department.child.name });
+    const siblingNode = a
+      .getByRole('treeitem')
+      .filter({ hasText: department.sibling.name });
+    await departmentSearch.fill(department.child.name);
+    await childNode.waitFor();
+    assert.equal(await siblingNode.count(), 0);
+    await departmentSearch.fill(department.sibling.name);
+    await siblingNode.waitFor();
+    await departmentSearch.fill('');
+    await childNode.waitFor();
+    const filteredUsers = a.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        url.pathname === '/api/system/user/list' &&
+        url.searchParams.get('deptId') === department.child.id
+      );
+    });
+    await childNode.click();
+    const filteredUsersResponse = await filteredUsers;
+    assert.equal(filteredUsersResponse.status(), 200);
+    const allUsers = a.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        url.pathname === '/api/system/user/list' &&
+        !url.searchParams.get('deptId')
+      );
+    });
+    await childNode.click();
+    const allUsersResponse = await allUsers;
+    assert.equal(allUsersResponse.status(), 200);
+
+    // A half-selected ancestor must select all children when clicked, including after a model update.
+    await a.evaluate(async () => {
+      const { mountPermissionTreeHarness } =
+        await import('/__tests__/fixtures/tree-harness.ts');
+      window.__unmountPermissionTreeHarness = mountPermissionTreeHarness();
+    });
+    try {
+      const harness = a.getByTestId('permission-tree-harness');
+      const root = harness
+        .getByRole('treeitem')
+        .filter({ hasText: 'Permission root' });
+      await root.getByRole('checkbox').click();
+      await a.waitForFunction(
+        () =>
+          document.querySelector(
+            '[data-testid="permission-tree-harness"] output',
+          )?.textContent === '["first","root","second"]',
+      );
+    } finally {
+      await a.evaluate(() => {
+        window.__unmountPermissionTreeHarness();
+        delete window.__unmountPermissionTreeHarness;
+      });
+    }
+
     // More than one API page must remain selectable without an oversized request.
     const rolePages = [];
     const roleOptions = Array.from({ length: 101 }, (_, index) => ({
