@@ -60,7 +60,7 @@ jobs:
           run_install: false
 
       - name: Setup Node 24
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           # Nest 12 ships ESM; Jest 30 needs Node >=24.9 for require(esm)
           node-version: '24'
