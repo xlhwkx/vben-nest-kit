@@ -241,15 +241,15 @@ try {
           }
         }
         assert.ok(selectedParent, 'Add-child form must display its parent');
-        const nameInput = dialog.locator('input[name="name"]');
+        const nameInput = dialog.getByRole('textbox', { name: /部门名称/u });
+        const nameInputId = await nameInput.getAttribute('id');
+        assert.ok(nameInputId, 'Department name input must have its label id');
         await nameInput.fill('Reset draft');
         await dialog.getByRole('button', { name: '重置', exact: true }).click();
-        await a.waitForFunction(() => {
-          const input = document.querySelector(
-            '[role="dialog"] input[name="name"]',
-          );
+        await a.waitForFunction((id) => {
+          const input = document.querySelector(`#${id}`);
           return input && input.value === '';
-        });
+        }, nameInputId);
         await dialog.getByText(selectedParent, { exact: true }).waitFor();
         await dialog.getByRole('button', { name: /^(取消|Cancel)$/u }).click();
         await dialog.waitFor({ state: 'hidden' });
