@@ -5,12 +5,21 @@ import { requestClient } from '#/api/request';
 export namespace SystemRoleApi {
   export interface SystemRole {
     version: number;
-    [key: string]: any;
+    code: string;
+    createTime: string;
     id: string;
     name: string;
     permissions: string[];
     remark?: string;
     status: 0 | 1;
+  }
+
+  export interface RoleInput {
+    code?: string;
+    name: string;
+    permissions?: string[];
+    remark?: null | string;
+    status?: 0 | 1;
   }
 }
 
@@ -40,9 +49,7 @@ async function getRoleOptions() {
  * 创建角色
  * @param data 角色数据
  */
-async function createRole(
-  data: Omit<SystemRoleApi.SystemRole, 'id' | 'version'>,
-) {
+async function createRole(data: SystemRoleApi.RoleInput) {
   return requestClient.post<SystemRoleApi.SystemRole>('/system/role', data);
 }
 
@@ -54,7 +61,7 @@ async function createRole(
  */
 async function updateRole(
   id: string,
-  data: Partial<Omit<SystemRoleApi.SystemRole, 'id' | 'version'>> & {
+  data: Partial<SystemRoleApi.RoleInput> & {
     version: number;
   },
 ) {

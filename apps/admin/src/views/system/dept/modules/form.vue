@@ -12,6 +12,7 @@ import { createDept, updateDept } from '#/api';
 import { $t } from '#/locales';
 
 import { useSchema } from '../data';
+import { encodeDeptFormValues } from './dept-form';
 
 const emit = defineEmits(['success']);
 const formData = ref<SystemDeptApi.SystemDept>();
@@ -32,9 +33,12 @@ const [Form, formApi] = useVbenForm({
   showDefaultActions: false,
 });
 
-function resetForm() {
-  formApi.reset();
-  formApi.setValues(formData.value || {});
+async function resetForm() {
+  const data = modalApi.getData();
+  await formApi.reset();
+  if (data) {
+    await formApi.setValues({ ...data, pid: data.pid || undefined });
+  }
 }
 
 const [Modal, modalApi] = useVbenModal<DeptModalData>({
@@ -42,8 +46,10 @@ const [Modal, modalApi] = useVbenModal<DeptModalData>({
     const { valid } = await formApi.validate();
     if (valid) {
       modalApi.lock();
-      const data = await formApi.getValues();
       try {
+        const data = encodeDeptFormValues(
+          await formApi.getValues<SystemDeptApi.DeptInput>(),
+        );
         await (formData.value?.id
           ? updateDept(formData.value.id, data)
           : createDept(data));
@@ -54,20 +60,11 @@ const [Modal, modalApi] = useVbenModal<DeptModalData>({
       }
     }
   },
-  onOpenChange(isOpen) {
+  async onOpenChange(isOpen) {
     if (isOpen) {
       const data = modalApi.getData();
-      if (data) {
-        formData.value = 'id' in data ? data : undefined;
-        const formValues = {
-          ...data,
-          ...(data.pid === 0 ? { pid: undefined } : {}),
-        };
-        formApi.setValues(formValues);
-      } else {
-        formData.value = undefined;
-        formApi.reset();
-      }
+      formData.value = data && 'id' in data ? data : undefined;
+      await resetForm();
     }
   },
 });

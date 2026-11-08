@@ -169,6 +169,29 @@ jobs:
           test "$navigation_grants" = 7
           home_count=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d qingzhan_bootstrap -tAc "SELECT count(*) FROM users WHERE home_path='/system/user'")
           test "$home_count" = 1
+          dict_types=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d qingzhan_bootstrap -tAc 'SELECT count(*) FROM dict_types')
+          dict_items=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d qingzhan_bootstrap -tAc 'SELECT count(*) FROM dict_items')
+          test "$dict_types" = 3
+          test "$dict_items" = 7
+          # A no-op upgrade must not bump the durable dictionary revision.
+          version_before=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d qingzhan_bootstrap -tAc 'SELECT version FROM dictionary_revision WHERE id=1')
+          docker run --rm --network host -e DATABASE_URL="$bootstrap_url" \
+            -e SYSTEM_DATA_USERNAME="$BOOTSTRAP_ADMIN_USERNAME" \
+            qingzhan-server:ci node dist/cli/provision-system-dictionaries.js
+          version_after=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d qingzhan_bootstrap -tAc 'SELECT version FROM dictionary_revision WHERE id=1')
+          test "$version_before" = "$version_after"
+          # Preserve disabled/customized dictionaries while restoring a missing type.
+          docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d qingzhan_bootstrap \
+            -c "UPDATE dict_types SET name='Custom gender',status=0 WHERE code='user_gender'; DELETE FROM dict_types WHERE code='yes_no';"
+          docker run --rm --network host -e DATABASE_URL="$bootstrap_url" \
+            -e SYSTEM_DATA_USERNAME="$BOOTSTRAP_ADMIN_USERNAME" \
+            qingzhan-server:ci node dist/cli/provision-system-dictionaries.js
+          preserved=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d qingzhan_bootstrap -tAc "SELECT count(*) FROM dict_types WHERE code='user_gender' AND status=0 AND name='Custom gender'")
+          restored=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d qingzhan_bootstrap -tAc 'SELECT count(*) FROM dict_items')
+          test "$preserved" = 1
+          test "$restored" = 7
+          provision_audits=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d qingzhan_bootstrap -tAc "SELECT count(*) FROM audit_logs WHERE action='system.dict.provision'")
+          test "$provision_audits" = 1
 
       - name: Production image migration, readiness and shutdown smoke
         shell: bash

@@ -76,7 +76,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
 });
 
 watch(dictCode, () => {
-  refreshGrid();
+  gridApi.reload();
 });
 
 function onActionClick({

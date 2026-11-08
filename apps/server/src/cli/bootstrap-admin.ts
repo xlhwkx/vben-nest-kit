@@ -2,6 +2,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import * as argon2 from 'argon2';
 import { SYSTEM_PERMISSION_CODES } from '../common/authorization/permission-codes';
 import { provisionAdminRoutes } from '../common/authorization/admin-routes';
+import { provisionSystemDictionaries } from '../common/initialization/system-dictionaries';
 import { PrismaClient } from '../generated/prisma/client';
 
 /** Explicit, one-time bootstrap for a migrated empty database. No demo accounts. */
@@ -27,6 +28,7 @@ async function main(): Promise<void> {
   });
   try {
     await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SET LOCAL lock_timeout = '5s'`;
       // Separate CLI processes must not both bootstrap the same empty database.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(7339202601::bigint)`;
       if ((await tx.user.count()) !== 0)
@@ -64,9 +66,10 @@ async function main(): Promise<void> {
         });
       }
       await provisionAdminRoutes(tx, role.id);
+      await provisionSystemDictionaries(tx);
     });
     console.log(
-      'Administrator and Qingzhan management routes created. Credentials are not printed.',
+      'Administrator, management routes and system dictionaries created. Credentials are not printed.',
     );
   } finally {
     await prisma.$disconnect();

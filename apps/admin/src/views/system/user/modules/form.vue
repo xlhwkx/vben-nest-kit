@@ -3,6 +3,7 @@ import type { SystemUserApi } from '#/api';
 
 import { computed, nextTick, ref } from 'vue';
 
+import { useAccess } from '@vben/access';
 import { useVbenDrawer } from '@vben/common-ui';
 
 import { useVbenForm } from '#/adapter/form';
@@ -10,13 +11,16 @@ import { createUser, updateUser } from '#/api';
 import { $t } from '#/locales';
 
 import { useFormSchema } from '../data';
+import { encodeUserFormValues } from './user-form';
 
 const emits = defineEmits(['success']);
 
 const formData = ref<SystemUserApi.SystemUser>();
+const { hasAccessByCodes } = useAccess();
+const canAssignRoles = () => hasAccessByCodes(['System:User:AssignRole']);
 
 const [Form, formApi] = useVbenForm({
-  schema: useFormSchema(false),
+  schema: useFormSchema(false, canAssignRoles()),
   showDefaultActions: false,
 });
 
@@ -24,18 +28,14 @@ const [Drawer, drawerApi] = useVbenDrawer<null | SystemUserApi.SystemUser>({
   async onConfirm() {
     const { valid } = await formApi.validate();
     if (!valid) return;
-    const values = await formApi.getValues();
-    // Nest: omit empty password on update (keep hash); never echo password
-    const payload = { ...values } as Record<string, unknown>;
-    if (!payload.password) {
-      delete payload.password;
-    }
+    const values = await formApi.getValues<SystemUserApi.UserInput>();
+    const payload = encodeUserFormValues(values, canAssignRoles());
     const existing = formData.value;
     drawerApi.lock();
     (existing
       ? updateUser(existing.id, { ...payload, version: existing.version })
       : createUser(
-          payload as Omit<SystemUserApi.SystemUser, 'id' | 'version'> & {
+          payload as SystemUserApi.UserInput & {
             password: string;
             username: string;
           },
@@ -57,10 +57,10 @@ const [Drawer, drawerApi] = useVbenDrawer<null | SystemUserApi.SystemUser>({
 
       if (data) {
         formData.value = { ...data };
-        formApi.setState({ schema: useFormSchema(true) });
+        formApi.setState({ schema: useFormSchema(true, canAssignRoles()) });
       } else {
         formData.value = undefined;
-        formApi.setState({ schema: useFormSchema(false) });
+        formApi.setState({ schema: useFormSchema(false, canAssignRoles()) });
       }
 
       // Wait for Vue to flush DOM updates (form fields mounted)

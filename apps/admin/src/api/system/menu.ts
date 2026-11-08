@@ -24,7 +24,8 @@ export namespace SystemMenuApi {
   /** 系统菜单 */
   export interface SystemMenu {
     version: number;
-    [key: string]: any;
+    /** 启用状态：0=禁用，1=启用 */
+    status: 0 | 1;
     /** 后端权限标识 */
     authCode?: null | string;
     /** 子级 */
@@ -35,6 +36,8 @@ export namespace SystemMenuApi {
     id: string;
     /** 菜单元数据 */
     meta?: {
+      /** 二开扩展字段由后端保留，管理表单编辑时不应丢失。 */
+      [key: string]: unknown;
       /** 激活时显示的图标 */
       activeIcon?: string;
       /** 作为路由时，需要激活的菜单的Path */

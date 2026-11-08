@@ -1,9 +1,7 @@
 <script lang="ts" setup>
-import type { DataNode } from 'antdv-next/dist/tree';
-
 import type { Recordable } from '@vben/types';
 
-import type { SystemRoleApi } from '#/api';
+import type { SystemMenuApi, SystemRoleApi } from '#/api';
 
 import { computed, nextTick, ref } from 'vue';
 
@@ -27,14 +25,14 @@ const [Form, formApi] = useVbenForm({
   showDefaultActions: false,
 });
 
-const permissions = ref<DataNode[]>([]);
+const permissions = ref<SystemMenuApi.SystemMenu[]>([]);
 const loadingPermissions = ref(false);
 
 const [Drawer, drawerApi] = useVbenDrawer<null | SystemRoleApi.SystemRole>({
   async onConfirm() {
     const { valid } = await formApi.validate();
     if (!valid) return;
-    const values = await formApi.getValues();
+    const values = await formApi.getValues<SystemRoleApi.RoleInput>();
     drawerApi.lock();
     (formData.value
       ? updateRole(formData.value.id, {
@@ -75,7 +73,7 @@ async function loadPermissions() {
   loadingPermissions.value = true;
   try {
     const res = await getMenuList();
-    permissions.value = res as unknown as DataNode[];
+    permissions.value = res;
   } finally {
     loadingPermissions.value = false;
   }
@@ -114,8 +112,8 @@ function getNodeClass(node: Recordable<any>) {
             icon-field="meta.icon"
           >
             <template #node="{ value }">
-              <IconifyIcon v-if="value.meta.icon" :icon="value.meta.icon" />
-              {{ $t(value.meta.title) }}
+              <IconifyIcon v-if="value.meta?.icon" :icon="value.meta.icon" />
+              {{ $t(value.meta?.title || value.name) }}
             </template>
           </Tree>
         </Spin>

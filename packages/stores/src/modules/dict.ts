@@ -54,8 +54,8 @@ const useDictStore = defineStore(
     const dictMap = ref<Record<string, DictItem[]>>({});
     const version = ref<number | string | undefined>();
     /**
-     * 批次号：`$reset` 或全量 `refreshDict()` 时递增，用于丢弃之前发出的 `loadAllDicts` 结果
-     * Batch token: bumped on `$reset` or full `refreshDict()` so earlier `loadAllDicts` responses are discarded
+     * 批次号：任何刷新或重置都使之前的全量请求失效，避免覆盖更新后的单个字典。
+     * Batch token: every refresh/reset invalidates earlier full-cache requests.
      */
     let batchToken = 0;
 
@@ -195,12 +195,12 @@ const useDictStore = defineStore(
      * @param code 可选；传入时只清除该编码，否则清除全部
      */
     function refreshDict(code?: string) {
+      batchToken += 1;
       if (code) {
         const { [code]: _removed, ...rest } = dictMap.value;
         dictMap.value = rest;
         pendingRequests.delete(code);
       } else {
-        batchToken += 1;
         dictMap.value = {};
         version.value = undefined;
         pendingRequests.clear();

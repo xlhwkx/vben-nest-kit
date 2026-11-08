@@ -6,7 +6,7 @@ import type { Recordable } from '@vben/types';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { SystemDeptApi, SystemUserApi } from '#/api';
 
-import { onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 
 import { Page, Tree, useVbenDrawer } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
@@ -19,6 +19,7 @@ import { $t } from '#/locales';
 import { createDateRangeCodec } from '#/utils/date-range-codec';
 
 import { ensureRoleLabelCache, useColumns, useGridFormSchema } from './data';
+import { filterDepartments } from './dept-filter';
 import Detail from './modules/detail.vue';
 import Form from './modules/form.vue';
 
@@ -36,7 +37,10 @@ type UserSearchSubmitValues = ReturnType<typeof userSearchCodec.encode>;
 
 const deptList = ref<SystemDeptApi.SystemDept[]>([]);
 const inputSearchValue = ref('');
-const selectedDeptId = ref<string>('');
+const selectedDeptId = ref<string>();
+const filteredDepartments = computed(() =>
+  filterDepartments(deptList.value, inputSearchValue.value),
+);
 
 const [FormDrawer, formDrawerApi] = useVbenDrawer({
   connectedComponent: Form,
@@ -179,28 +183,13 @@ async function loadDeptList() {
   }
 }
 
-function selectDept(v: string) {
-  selectedDeptId.value = v;
-  gridApi.query();
-}
-
-function searchDept(value: string) {
-  if (!value) {
-    loadDeptList();
-    return;
-  }
-  const filtered = deptList.value.filter((dept) =>
-    dept.name.toLowerCase().includes(value.toLowerCase()),
-  );
-  deptList.value = filtered;
+function selectDept(value: (number | string)[] | number | string | undefined) {
+  selectedDeptId.value = typeof value === 'string' ? value : undefined;
+  gridApi.reload();
 }
 
 onMounted(() => {
   void loadDeptList();
-});
-
-watch(inputSearchValue, (value) => {
-  searchDept(value);
 });
 </script>
 <template>
@@ -216,9 +205,11 @@ watch(inputSearchValue, (value) => {
         <Tree
           label-field="name"
           value-field="id"
-          :tree-data="deptList"
+          :tree-data="filteredDepartments"
+          :model-value="selectedDeptId"
+          allow-clear
           :default-expanded-level="2"
-          @select="selectDept"
+          @update:model-value="selectDept"
         />
       </Card>
 
@@ -253,7 +244,7 @@ watch(inputSearchValue, (value) => {
                     title: $t('ui.actionMessage.deleteConfirm', [row.name]),
                     confirm: () => onDelete(row),
                   },
-                  auth: ['AC_100100'],
+                  auth: ['System:User:Delete'],
                 },
               ]"
               align="center"

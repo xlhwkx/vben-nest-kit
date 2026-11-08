@@ -134,6 +134,7 @@ try {
 
   // Verify the supported management pages actually invoke the real API.
   if (app === 'admin') {
+    const userListUrl = `${api}/system/user/list?*`;
     const failedRoleReads = [];
     a.on('response', (response) => {
       if (
@@ -152,6 +153,16 @@ try {
       ['/system/dict/data/user_gender', '/system/dict/data/list'],
       ['/system/user', '/system/user/list'],
     ]) {
+      if (path === '/system/user') {
+        // Preserve the real API response, exposing a second page only for this pagination regression.
+        await a.route(userListUrl, async (route) => {
+          const response = await route.fetch();
+          assert.equal(response.status(), 200);
+          const payload = await response.json();
+          payload.data.total = Math.max(payload.data.total, 50);
+          await route.fulfill({ response, json: payload });
+        });
+      }
       console.log(
         JSON.stringify({
           app,
@@ -203,8 +214,211 @@ try {
       );
       // Data must reach rendered content; missing components can still have a valid route.
       await a.locator('main').waitFor();
+      if (path === '/system/dept') {
+        // Resetting an add-child draft must keep its initially selected parent.
+        await a
+          .getByRole('button', { name: '新增下级', exact: true })
+          .last()
+          .click();
+        const dialog = a.getByRole('dialog');
+        const names = (nodes) =>
+          nodes.flatMap((node) => [node.name, ...names(node.children ?? [])]);
+        const departmentNames = names(payload.data);
+        await a.waitForFunction(
+          (names) =>
+            names.some((name) =>
+              document
+                .querySelector('[role="dialog"]')
+                ?.textContent?.includes(name),
+            ),
+          departmentNames,
+        );
+        let selectedParent;
+        for (const name of departmentNames) {
+          if (await dialog.getByText(name, { exact: true }).count()) {
+            selectedParent = name;
+            break;
+          }
+        }
+        assert.ok(selectedParent, 'Add-child form must display its parent');
+        const nameInput = dialog.getByRole('textbox', { name: /部门名称/u });
+        const nameInputId = await nameInput.getAttribute('id');
+        assert.ok(nameInputId, 'Department name input must have its label id');
+        await nameInput.fill('Reset draft');
+        await dialog.getByRole('button', { name: /^重\s*置$/u }).click();
+        await a.waitForFunction((id) => {
+          const input = document.querySelector(`#${id}`);
+          return input && input.value === '';
+        }, nameInputId);
+        await dialog.getByText(selectedParent, { exact: true }).waitFor();
+        await dialog
+          .getByRole('button', { name: /^(取\s*消|Cancel)$/u })
+          .click();
+        await dialog.waitFor({ state: 'hidden' });
+      }
     }
     assert.deepEqual(failedRoleReads, [], 'Role label reads must succeed');
+
+    // Filtering from page two must reset to page one even when the new department has few users.
+    const pageTwo = a.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        url.pathname === '/api/system/user/list' &&
+        url.searchParams.get('page') === '2'
+      );
+    });
+    await a.locator('.vxe-pager--num-btn').filter({ hasText: /^2$/u }).click();
+    const pageTwoResponse = await pageTwo;
+    assert.equal(pageTwoResponse.status(), 200);
+    await a.unroute(userListUrl);
+
+    // The department tree must keep nested matches and send a UUID, then allow clearing.
+    const department = await a.evaluate(async () => {
+      const { getDeptList } = await import('/src/api/system/dept.ts');
+      const departments = await getDeptList();
+      const parent = departments.find((item) => item.children?.length >= 2);
+      if (!parent)
+        throw new Error(
+          'Department regression requires a seeded parent with two children',
+        );
+      return {
+        parent: parent.name,
+        child: parent.children[0],
+        sibling: parent.children[1],
+      };
+    });
+    const departmentSearch = a.getByPlaceholder(/搜索部门|Search Department/u);
+    const childNode = a
+      .getByRole('treeitem')
+      .filter({ hasText: department.child.name });
+    const siblingNode = a
+      .getByRole('treeitem')
+      .filter({ hasText: department.sibling.name });
+    await departmentSearch.fill(department.child.name);
+    await childNode.waitFor();
+    await siblingNode.waitFor({ state: 'detached' });
+    await departmentSearch.fill(department.sibling.name);
+    await siblingNode.waitFor();
+    await departmentSearch.fill('');
+    await childNode.waitFor();
+    const filteredUsers = a.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        url.pathname === '/api/system/user/list' &&
+        url.searchParams.get('deptId') === department.child.id
+      );
+    });
+    await childNode.click();
+    const filteredUsersResponse = await filteredUsers;
+    assert.equal(filteredUsersResponse.status(), 200);
+    assert.equal(
+      new URL(filteredUsersResponse.url()).searchParams.get('page'),
+      '1',
+    );
+    const allUsers = a.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        url.pathname === '/api/system/user/list' &&
+        !url.searchParams.get('deptId')
+      );
+    });
+    await childNode.click();
+    const allUsersResponse = await allUsers;
+    assert.equal(allUsersResponse.status(), 200);
+
+    // Optional role-label enrichment must not block the selected user's details.
+    const allUsersPayload = await allUsersResponse.json();
+    const firstUser = allUsersPayload.data.items.find(
+      (user) => user.roles.length > 0,
+    );
+    assert.ok(
+      firstUser,
+      'User detail regression requires a seeded user with roles',
+    );
+    const roleLookupArrived = gate();
+    const releaseRoleLookup = gate();
+    const roleLookupUrl = `${api}/system/role/list?*`;
+    await a.route(roleLookupUrl, async (route) => {
+      roleLookupArrived.resolve();
+      await bounded(releaseRoleLookup.promise);
+      await route.continue();
+    });
+    const userRow = a.locator(`.vxe-body--row[rowid="${firstUser.id}"]`);
+    try {
+      await userRow
+        .getByRole('button', { name: /^详\s*情$/u })
+        .last()
+        .click();
+      await bounded(roleLookupArrived.promise);
+      const dialog = a.getByRole('dialog');
+      await dialog.getByText(firstUser.id, { exact: true }).waitFor();
+      const roleLookupResponse = a.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === '/api/system/role/list',
+      );
+      releaseRoleLookup.resolve();
+      const roleResponse = await roleLookupResponse;
+      assert.equal(roleResponse.status(), 200);
+      const rolePayload = await roleResponse.json();
+      const displayedRole = rolePayload.data.items.find((role) =>
+        firstUser.roles.includes(role.id),
+      );
+      assert.ok(
+        displayedRole,
+        'Seeded user role must be available for display',
+      );
+      await dialog
+        .getByText(
+          displayedRole.code
+            ? `${displayedRole.name} (${displayedRole.code})`
+            : displayedRole.name,
+          { exact: false },
+        )
+        .waitFor();
+      await dialog.locator('button:has(.lucide-x)').click();
+      await dialog.waitFor({ state: 'hidden' });
+    } finally {
+      releaseRoleLookup.resolve();
+      await a.unroute(roleLookupUrl);
+    }
+
+    // A half-selected ancestor must select all children when clicked, including after a model update.
+    await a.evaluate(async () => {
+      const { mountPermissionTreeHarness } =
+        await import('/__tests__/fixtures/tree-harness.ts');
+      window.__unmountPermissionTreeHarness = mountPermissionTreeHarness();
+    });
+    try {
+      const harness = a.getByTestId('permission-tree-harness');
+      const root = harness
+        .getByRole('treeitem')
+        .filter({ hasText: 'Permission root' });
+      await root.getByRole('checkbox').click();
+      const waitForSelection = async (expected) => {
+        try {
+          await a.waitForFunction(
+            (expected) =>
+              document.querySelector(
+                '[data-testid="permission-tree-harness"] output',
+              )?.textContent === expected,
+            expected,
+          );
+        } catch (error) {
+          throw new Error(
+            `Permission tree selection: ${await harness.locator('output').textContent()}; expected ${expected}`,
+            { cause: error },
+          );
+        }
+      };
+      await waitForSelection('["first","root","second"]');
+      await root.getByRole('checkbox').click();
+      await waitForSelection('[]');
+    } finally {
+      await a.evaluate(() => {
+        window.__unmountPermissionTreeHarness();
+        delete window.__unmountPermissionTreeHarness;
+      });
+    }
 
     // More than one API page must remain selectable without an oversized request.
     const rolePages = [];

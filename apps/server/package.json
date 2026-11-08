@@ -25,6 +25,7 @@
     "test:load:smoke": "node ../../scripts/qingzhan/load-smoke.mjs",
     "bootstrap:admin": "node dist/cli/bootstrap-admin.js",
     "provision:admin-routes": "node dist/cli/provision-admin-routes.js",
+    "provision:dicts": "node dist/cli/provision-system-dictionaries.js",
     "maintenance:data": "node dist/cli/maintain-data.js"
   },
   "dependencies": {

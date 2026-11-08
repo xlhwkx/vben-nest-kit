@@ -6,6 +6,8 @@ import { z } from '#/adapter/form';
 import { isDictCodeExists } from '#/api';
 import { $t } from '#/locales';
 
+import { isFiniteDictionaryNumber } from './modules/dict-data-form';
+
 const COLOR_OPTIONS = [
   { label: 'success', value: 'success' },
   { label: 'processing', value: 'processing' },
@@ -225,10 +227,36 @@ export function useDataFormSchema(): VbenFormSchema[] {
         .max(50, $t('ui.formRules.maxLength', [$t('system.dict.label'), 50])),
     },
     {
+      component: 'Select',
+      componentProps: {
+        options: [
+          { label: $t('system.dict.valueTypeText'), value: 'string' },
+          { label: $t('system.dict.valueTypeNumber'), value: 'number' },
+        ],
+      },
+      defaultValue: 'string',
+      fieldName: 'valueType',
+      label: $t('system.dict.valueType'),
+      rules: z.enum(['string', 'number']),
+    },
+    {
       component: 'Input',
       fieldName: 'value',
       label: $t('system.dict.value'),
-      rules: 'required',
+      dependencies: {
+        triggerFields: ['valueType'],
+        resolve: ({ values }) => ({
+          rules: z
+            .string()
+            .min(1, $t('ui.formRules.required', [$t('system.dict.value')]))
+            .refine(
+              (value) =>
+                values.valueType !== 'number' ||
+                isFiniteDictionaryNumber(value),
+              { message: $t('system.dict.finiteNumber') },
+            ),
+        }),
+      },
     },
     {
       component: 'Select',
@@ -245,10 +273,13 @@ export function useDataFormSchema(): VbenFormSchema[] {
       componentProps: {
         class: 'w-full',
         min: 0,
+        max: 2_147_483_647,
+        precision: 0,
       },
       defaultValue: 0,
       fieldName: 'sort',
       label: $t('system.dict.sort'),
+      rules: z.number().int().min(0).max(2_147_483_647),
     },
     {
       component: 'RadioGroup',

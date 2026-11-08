@@ -38,7 +38,7 @@ pnpm --filter @qingzhan/server build
 pnpm --filter @qingzhan/server bootstrap:admin
 ```
 
-该命令仅在 users 表为空时执行，创建管理员、权限按钮、管理目录与六个页面路由，首页 `/system/user`。重复运行拒绝执行，不重置已有账号。命令不自动加载 `.env`，应由进程环境提供配置；镜像内对应 `node dist/cli/bootstrap-admin.js`。
+该命令仅在 users 表为空时执行，在同一事务中创建管理员、权限按钮、管理目录与六个页面路由，以及 `user_gender`、`common_status`、`yes_no` 三套基础字典，共七个条目，首页 `/system/user`。重复运行拒绝执行，不重置已有账号。命令不自动加载 `.env`，应由进程环境提供配置；镜像内对应 `node dist/cli/bootstrap-admin.js`。
 
 **已有库缺管理入口**：确认目标账号当前已持有全部系统权限，提供 `ADMIN_ROUTES_USERNAME`，运行：
 
@@ -47,6 +47,15 @@ pnpm --filter @qingzhan/server provision:admin-routes
 ```
 
 命令使用管理写锁，在一个事务中补齐导航、关联该用户专用角色、调整首页并写审计。不会给共享旧角色追加权限。遇到保留名称/路径拓扑冲突、停用或共享的导航角色、导航角色已有其他授权时拒绝并回滚。请人工复核冲突定义，不要通过重跑 seed 强行覆盖。已存在的路径/组件/权限码等关键定义不会被自动改写。
+
+**已有库缺基础字典**：提供持有全部系统权限的活跃管理员用户名 `SYSTEM_DATA_USERNAME`，运行：
+
+```bash
+pnpm --filter @qingzhan/server provision:dicts
+# 镜像内：node dist/cli/provision-system-dictionaries.js
+```
+
+命令同样需要进程环境中的 `DATABASE_URL`，不自动读取 `.env`。它在管理写锁及同一事务内复核管理员、补齐缺失的基础字典类型及其默认条目、写入审计。已有类型及其条目保持原样，包括停用、改名、自定义值或主动清空的数据；不会补回已有类型中被删除的条目。重复执行无变化时不会增加字典版本或成功审计。开发 seed 也复用该规则，不再重置已有字典配置。业务字典仍由维护者在管理页自行创建。
 
 ## 4. 同源站点与反向代理
 

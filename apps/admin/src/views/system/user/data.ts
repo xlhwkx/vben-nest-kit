@@ -4,7 +4,7 @@ import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridColumns } from '#/adapter/vxe-table';
 import type { SystemUserApi } from '#/api';
 
-import { h } from 'vue';
+import { h, shallowRef } from 'vue';
 
 import { useDictStore } from '@vben/stores';
 
@@ -17,7 +17,7 @@ import { $t } from '#/locales';
 const USER_GENDER_CODE = 'user_gender';
 
 /** roleId → "name" or "name (code)" for list/detail display */
-let roleLabelById = new Map<string, string>();
+const roleLabelById = shallowRef(new Map<string, string>());
 
 /**
  * Prefetch role labels using bounded API pages.
@@ -25,10 +25,10 @@ let roleLabelById = new Map<string, string>();
  */
 export async function ensureRoleLabelCache(): Promise<void> {
   // Labels are optional enrichment: a user-list reader may lack role-list permission.
-  roleLabelById = new Map();
+  roleLabelById.value = new Map();
   try {
     const items = await getRoleOptions();
-    roleLabelById = new Map(
+    roleLabelById.value = new Map(
       items.map((r) => [r.id, r.code ? `${r.name} (${r.code})` : r.name]),
     );
   } catch (error) {
@@ -39,10 +39,13 @@ export async function ensureRoleLabelCache(): Promise<void> {
 /** Map role ids to display labels; unknown ids fall back to raw id. */
 export function formatRoleLabels(roleIds?: string[]): string {
   if (!roleIds?.length) return '';
-  return roleIds.map((id) => roleLabelById.get(id) ?? id).join(', ');
+  return roleIds.map((id) => roleLabelById.value.get(id) ?? id).join(', ');
 }
 
-export function useFormSchema(isEdit = false): VbenFormSchema[] {
+export function useFormSchema(
+  isEdit = false,
+  canAssignRoles = false,
+): VbenFormSchema[] {
   const dictStore = useDictStore();
   return [
     {
@@ -88,7 +91,6 @@ export function useFormSchema(isEdit = false): VbenFormSchema[] {
       },
       fieldName: 'deptId',
       label: $t('system.user.dept'),
-      rules: 'required',
     },
     {
       component: 'ApiSelect',
@@ -102,6 +104,10 @@ export function useFormSchema(isEdit = false): VbenFormSchema[] {
       },
       fieldName: 'roles',
       label: $t('system.user.roles'),
+      dependencies: {
+        resolve: () => ({ if: canAssignRoles }),
+        triggerFields: [],
+      },
     },
 
     {
@@ -200,7 +206,9 @@ export function useDescriptionItems(
     },
     {
       label: $t('system.user.gender'),
-      content: dictStore.getDictLabel(USER_GENDER_CODE, row?.gender),
+      content: String(
+        dictStore.getDictLabel(USER_GENDER_CODE, row?.gender) ?? '',
+      ),
     },
     {
       label: $t('system.user.status'),

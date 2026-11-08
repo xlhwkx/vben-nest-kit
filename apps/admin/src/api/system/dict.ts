@@ -4,7 +4,6 @@ import { requestClient } from '#/api/request';
 
 export namespace SystemDictApi {
   export interface SystemDictType {
-    [key: string]: any;
     code: string;
     createTime?: string;
     id: string;
@@ -14,7 +13,6 @@ export namespace SystemDictApi {
   }
 
   export interface SystemDictData {
-    [key: string]: any;
     color?: string;
     createTime?: string;
     dictCode: string;
@@ -25,6 +23,13 @@ export namespace SystemDictApi {
     status: 0 | 1;
     value: number | string;
   }
+
+  export type DictDataInput = Omit<
+    SystemDictData,
+    'color' | 'createTime' | 'id'
+  > & {
+    color?: null | string;
+  };
 }
 
 /**
@@ -95,9 +100,7 @@ async function getDictDataList(params: Recordable<any>) {
  * 创建字典数据
  * @param data 字典数据
  */
-async function createDictData(
-  data: Omit<SystemDictApi.SystemDictData, 'createTime' | 'id'>,
-) {
+async function createDictData(data: SystemDictApi.DictDataInput) {
   return requestClient.post('/system/dict/data', data);
 }
 
@@ -106,10 +109,7 @@ async function createDictData(
  * @param id 字典数据 ID
  * @param data 字典数据
  */
-async function updateDictData(
-  id: string,
-  data: Omit<SystemDictApi.SystemDictData, 'createTime' | 'id'>,
-) {
+async function updateDictData(id: string, data: SystemDictApi.DictDataInput) {
   return requestClient.put(`/system/dict/data/${id}`, data);
 }
 
