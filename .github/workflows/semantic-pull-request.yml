@@ -19,7 +19,8 @@ jobs:
       - name: Validate PR title
         uses: amannn/action-semantic-pull-request@v6
         with:
-          wip: true
+          # Draft PRs cover WIP; avoid commit-status writes with this read-only token.
+          wip: false
           subjectPattern: ^(?![A-Z]).+$
           subjectPatternError: |
             The subject "{subject}" found in the pull request title "{title}"
