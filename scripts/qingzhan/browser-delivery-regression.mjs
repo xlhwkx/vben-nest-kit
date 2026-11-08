@@ -245,13 +245,15 @@ try {
         const nameInputId = await nameInput.getAttribute('id');
         assert.ok(nameInputId, 'Department name input must have its label id');
         await nameInput.fill('Reset draft');
-        await dialog.getByRole('button', { name: '重置', exact: true }).click();
+        await dialog.getByRole('button', { name: /^重\s*置$/u }).click();
         await a.waitForFunction((id) => {
           const input = document.querySelector(`#${id}`);
           return input && input.value === '';
         }, nameInputId);
         await dialog.getByText(selectedParent, { exact: true }).waitFor();
-        await dialog.getByRole('button', { name: /^(取消|Cancel)$/u }).click();
+        await dialog
+          .getByRole('button', { name: /^(取\s*消|Cancel)$/u })
+          .click();
         await dialog.waitFor({ state: 'hidden' });
       }
     }
@@ -344,7 +346,7 @@ try {
     const userRow = a.locator(`.vxe-body--row[rowid="${firstUser.id}"]`);
     try {
       await userRow
-        .getByRole('button', { name: '详情', exact: true })
+        .getByRole('button', { name: /^详\s*情$/u })
         .last()
         .click();
       await bounded(roleLookupArrived.promise);
