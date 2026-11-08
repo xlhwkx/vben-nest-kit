@@ -8,9 +8,16 @@ export type MenuFormValues = MenuSubmitValues & { linkSrc?: string };
 
 export function encodeMenuFormValues(
   values: Readonly<MenuFormValues>,
+  originalMeta?: SystemMenuApi.SystemMenu['meta'],
+  editableMetaFields: readonly string[] = [],
 ): MenuSubmitValues {
   const { linkSrc, ...formValues } = values;
-  const meta = { ...values.meta };
+  // setSubmitValues filters fields absent from the schema; retain those extensions.
+  const retainedMeta = { ...originalMeta };
+  // Omitted editable fields mean clear, so do not restore their previous values.
+  for (const key of editableMetaFields)
+    Reflect.deleteProperty(retainedMeta, key);
+  const meta = { ...retainedMeta, ...values.meta };
   Reflect.deleteProperty(meta, 'link');
   Reflect.deleteProperty(meta, 'iframeSrc');
   if (values.type === 'link') meta.link = linkSrc;

@@ -36,6 +36,8 @@ export namespace SystemMenuApi {
     id: string;
     /** 菜单元数据 */
     meta?: {
+      /** 二开扩展字段由后端保留，管理表单编辑时不应丢失。 */
+      [key: string]: unknown;
       /** 激活时显示的图标 */
       activeIcon?: string;
       /** 作为路由时，需要激活的菜单的Path */

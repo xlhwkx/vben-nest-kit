@@ -145,4 +145,45 @@ describe('useDictStore', () => {
 
     expect(store.dictMap).toEqual({});
   });
+
+  it('keeps a freshly edited dictionary when an earlier full preload finishes late', async () => {
+    const all = deferred<Record<string, DictItem[]>>();
+    const started = deferred<undefined>();
+    setDictHandler({
+      getAllDicts: () => {
+        started.resolve(undefined);
+        return all.promise;
+      },
+      getVersion: async () => 6,
+      getDict: async () => [{ label: 'New', value: 1 }],
+    });
+    const store = useDictStore();
+    store.dictMap = { common_status: [{ label: 'Enabled', value: 1 }] };
+    store.version = 5;
+    const pendingAll = store.loadAllDicts(true);
+    await started.promise;
+    store.refreshDict('user_gender');
+    await store.getDict('user_gender');
+    all.resolve({ user_gender: [{ label: 'Old', value: 1 }] });
+    await pendingAll;
+    expect(store.dictMap).toEqual({
+      common_status: [{ label: 'Enabled', value: 1 }],
+      user_gender: [{ label: 'New', value: 1 }],
+    });
+    expect(store.version).toBe(5);
+  });
+
+  it('cancels an earlier full preload still waiting for its version after a partial refresh', async () => {
+    const version = deferred<number>();
+    const getAllDicts = vi.fn(async () => ({}));
+    setDictHandler({ getAllDicts, getVersion: () => version.promise });
+    const store = useDictStore();
+    const pending = store.loadAllDicts();
+    store.refreshDict('user_gender');
+    version.resolve(7);
+    await pending;
+    expect(getAllDicts).not.toHaveBeenCalled();
+    expect(store.dictMap).toEqual({});
+    expect(store.version).toBeUndefined();
+  });
 });

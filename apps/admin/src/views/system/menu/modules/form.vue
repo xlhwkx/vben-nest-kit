@@ -451,11 +451,17 @@ const schema: VbenFormSchema<MenuFormValues>[] = [
 
 const breakpoints = useBreakpoints(breakpointsTailwind);
 const isHorizontal = computed(() => breakpoints.greaterOrEqual('md').value);
+const editableMetaFields = schema.flatMap(({ fieldName }) =>
+  typeof fieldName === 'string' && fieldName.startsWith('meta.')
+    ? [fieldName.slice('meta.'.length)]
+    : [],
+);
 
 const [Form, formApi] = useVbenForm({
   codec: {
     decode: decodeMenuFormValues,
-    encode: encodeMenuFormValues,
+    encode: (values) =>
+      encodeMenuFormValues(values, formData.value?.meta, editableMetaFields),
   },
   commonConfig: {
     colon: true,

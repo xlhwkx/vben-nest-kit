@@ -185,7 +185,7 @@ async function loadDeptList() {
 
 function selectDept(value: (number | string)[] | number | string | undefined) {
   selectedDeptId.value = typeof value === 'string' ? value : undefined;
-  gridApi.query();
+  gridApi.reload();
 }
 
 onMounted(() => {

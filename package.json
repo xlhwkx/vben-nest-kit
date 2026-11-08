@@ -47,7 +47,7 @@
     "catalog": "pnpm dlx codemod pnpm/catalog",
     "test:load:smoke": "node scripts/qingzhan/load-smoke.mjs",
     "test:auth:browser": "node scripts/qingzhan/browser-auth-regression.mjs",
-    "test:delivery": "vitest run packages/effects/request/src packages/utils/src internal/vite-config/src apps/admin/__tests__/unit apps/admin/src/adapter/component/__tests__",
+    "test:delivery": "vitest run packages/effects/request/src packages/utils/src packages/stores/src/modules/dict.test.ts internal/vite-config/src apps/admin/__tests__/unit apps/admin/src/adapter/component/__tests__",
     "test:delivery:browser": "node scripts/qingzhan/run-browser-regression.mjs",
     "docs:dev": "pnpm -F @qingzhan/docs-site run dev",
     "docs:build": "pnpm -F @qingzhan/docs-site run build",

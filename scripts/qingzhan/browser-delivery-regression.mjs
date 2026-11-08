@@ -134,6 +134,7 @@ try {
 
   // Verify the supported management pages actually invoke the real API.
   if (app === 'admin') {
+    const userListUrl = `${api}/system/user/list?*`;
     const failedRoleReads = [];
     a.on('response', (response) => {
       if (
@@ -152,6 +153,16 @@ try {
       ['/system/dict/data/user_gender', '/system/dict/data/list'],
       ['/system/user', '/system/user/list'],
     ]) {
+      if (path === '/system/user') {
+        // Preserve the real API response, exposing a second page only for this pagination regression.
+        await a.route(userListUrl, async (route) => {
+          const response = await route.fetch();
+          assert.equal(response.status(), 200);
+          const payload = await response.json();
+          payload.data.total = Math.max(payload.data.total, 50);
+          await route.fulfill({ response, json: payload });
+        });
+      }
       console.log(
         JSON.stringify({
           app,
@@ -206,6 +217,19 @@ try {
     }
     assert.deepEqual(failedRoleReads, [], 'Role label reads must succeed');
 
+    // Filtering from page two must reset to page one even when the new department has few users.
+    const pageTwo = a.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        url.pathname === '/api/system/user/list' &&
+        url.searchParams.get('page') === '2'
+      );
+    });
+    await a.locator('.vxe-pager--num-btn').filter({ hasText: /^2$/u }).click();
+    const pageTwoResponse = await pageTwo;
+    assert.equal(pageTwoResponse.status(), 200);
+    await a.unroute(userListUrl);
+
     // The department tree must keep nested matches and send a UUID, then allow clearing.
     const department = await a.evaluate(async () => {
       const { getDeptList } = await import('/src/api/system/dept.ts');
@@ -245,6 +269,10 @@ try {
     await childNode.click();
     const filteredUsersResponse = await filteredUsers;
     assert.equal(filteredUsersResponse.status(), 200);
+    assert.equal(
+      new URL(filteredUsersResponse.url()).searchParams.get('page'),
+      '1',
+    );
     const allUsers = a.waitForResponse((response) => {
       const url = new URL(response.url());
       return (
