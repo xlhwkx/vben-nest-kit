@@ -268,12 +268,25 @@ try {
         .getByRole('treeitem')
         .filter({ hasText: 'Permission root' });
       await root.getByRole('checkbox').click();
-      await a.waitForFunction(
-        () =>
-          document.querySelector(
-            '[data-testid="permission-tree-harness"] output',
-          )?.textContent === '["first","root","second"]',
-      );
+      const waitForSelection = async (expected) => {
+        try {
+          await a.waitForFunction(
+            (expected) =>
+              document.querySelector(
+                '[data-testid="permission-tree-harness"] output',
+              )?.textContent === expected,
+            expected,
+          );
+        } catch (error) {
+          throw new Error(
+            `Permission tree selection: ${await harness.locator('output').textContent()}; expected ${expected}`,
+            { cause: error },
+          );
+        }
+      };
+      await waitForSelection('["first","root","second"]');
+      await root.getByRole('checkbox').click();
+      await waitForSelection('[]');
     } finally {
       await a.evaluate(() => {
         window.__unmountPermissionTreeHarness();

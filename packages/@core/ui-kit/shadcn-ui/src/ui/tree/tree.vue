@@ -184,7 +184,10 @@ watch(
 function updateModelValue(val: Arrayable<Recordable<any>>) {
   if (Array.isArray(val)) {
     const filteredVal = val.filter((v) => !get(v, props.disabledField));
-    const selectedIds = filteredVal.map((v) => get(v, props.valueField));
+    // Reka appends descendants when selecting an ancestor, including already selected children.
+    const selectedIds = [
+      ...new Set(filteredVal.map((v) => get(v, props.valueField))),
+    ];
     modelValue.value = mergeIndeterminate(selectedIds);
   } else {
     // 单选模式下取消选择时 val 为 null/undefined，需要同步清空
