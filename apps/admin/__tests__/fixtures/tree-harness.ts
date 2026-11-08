@@ -6,6 +6,9 @@ import { Tree } from '@vben/common-ui';
 export function mountPermissionTreeHarness() {
   const host = document.createElement('div');
   host.dataset.testid = 'permission-tree-harness';
+  // Keep the isolated fixture above the application's fixed layout for real pointer clicks.
+  host.style.cssText =
+    'position:fixed;top:16px;left:16px;z-index:2147483647;width:320px;padding:16px;background:white';
   document.body.append(host);
   const selected = ref<(number | string)[]>(['root', 'first']);
   const app = createApp({
