@@ -75,6 +75,7 @@ const schema: VbenFormSchema<MenuFormValues>[] = [
   {
     component: 'ApiTreeSelect',
     componentProps: {
+      allowClear: true,
       api: getMenuList,
       class: 'w-full',
       filterTreeNode(input: string, node: Recordable<any>) {
